@@ -23,6 +23,9 @@
   "peerDependencies": {
     "typescript": "^5.0.0"
   },
+  "exports": {
+    ".": "./index.ts"
+  },
   "config": {
     "commitizen": {
       "path": "./node_modules/cz-conventional-changelog"
