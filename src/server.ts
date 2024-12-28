@@ -1,3 +1,4 @@
+import { Middleware } from "./middlewares";
 import { Response } from "./response";
 import { Router } from "./router";
 
@@ -9,9 +10,11 @@ export class Application {
 	private static instance: Application | null = null;
 
 	private router: Router;
+	private middlewares: Middleware;
 
 	private constructor() {
 		this.router = Router.getInstance();
+		this.middlewares = new Middleware();
 	}
 
 	public static getInstance(): Application {
@@ -35,6 +38,14 @@ export class Application {
 
 	public routes(routes: Router): void {
 		this.router.register(routes.list());
+	}
+
+	public use(app: Application | string | Handler, handler?: Handler): void {
+		if (typeof app === "string" && handler) {
+			this.middlewares.setMiddleware(app, handler);
+		} else {
+			this.middlewares.setMiddleware("*", app as Handler);
+		}
 	}
 
 	public get(path: string, ...handlers: Handler[]): void {
@@ -80,8 +91,7 @@ export class Application {
 		}
 
 		const request = new Request(req, {});
-		const handlers = [...(route ? route.handlers : [])];
-
+		const handlers = [...this.middlewares.isMiddlewareMatching(urlPath), ...(route ? route.handlers : [])];
 		if (handlers.length > 0) {
 			this.executeHandlers(handlers, request, response);
 		}
@@ -93,8 +103,6 @@ export class Application {
 
 	private executeHandlers(handlers: Handler[], req: Request, res: Response): void {
 		const execute = (index: number): void => {
-			console.log(handlers[index]);
-
 			if (handlers.length > index) {
 				handlers[index](req, res, () => execute(index + 1));
 			}
