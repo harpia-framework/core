@@ -1,26 +1,105 @@
+import { Response } from "./response";
+import { Router } from "./router";
+
+import type { FetchRequest } from "./request";
+import type { FetchResponse } from "./response";
+import type { Handler } from "./types/handler";
+
 export class Application {
-  private static instance: Application | null = null;
+	private static instance: Application | null = null;
 
-  private constructor() {}
+	private router: Router;
 
-  public static getInstance(): Application {
-    if (!this.instance) {
-      this.instance = new Application();
-    }
+	private constructor() {
+		this.router = Router.getInstance();
+	}
 
-    return this.instance;
-  }
+	public static getInstance(): Application {
+		if (!Application.instance) {
+			Application.instance = new Application();
+		}
 
-  public listen(port: number, handler: () => void) {
-    Bun.serve({
-      port,
-      fetch(req) {
-        return new Response("Hello");
-      }
-    });
+		return Application.instance;
+	}
 
-    if (handler) {
-      handler();
-    }
-  }
+	public listen(port: number, handler: () => void) {
+		Bun.serve({
+			port,
+			fetch: this.handleRequest.bind(this),
+		});
+
+		if (handler) {
+			handler();
+		}
+	}
+
+	public routes(routes: Router): void {
+		this.router.register(routes.list());
+	}
+
+	public get(path: string, ...handlers: Handler[]): void {
+		this.router.get(path, ...handlers);
+	}
+
+	public post(path: string, ...handlers: Handler[]): void {
+		this.router.post(path, ...handlers);
+	}
+
+	public put(path: string, ...handlers: Handler[]): void {
+		this.router.put(path, ...handlers);
+	}
+
+	public delete(path: string, ...handlers: Handler[]): void {
+		this.router.delete(path, ...handlers);
+	}
+
+	public patch(path: string, ...handlers: Handler[]): void {
+		this.router.patch(path, ...handlers);
+	}
+
+	public options(path: string, ...handlers: Handler[]): void {
+		this.router.options(path, ...handlers);
+	}
+
+	public head(path: string, ...handlers: Handler[]): void {
+		this.router.head(path, ...handlers);
+	}
+
+	private async handleRequest(req: FetchRequest): Promise<FetchResponse> {
+		const response = new Response();
+
+		const urlPath = new URL(req.url).pathname;
+		const route = this.router.isRouteMatching(urlPath, req.method);
+
+		if (!route) {
+			return response.parse();
+		}
+
+		if (!route.controller) {
+			throw new Error("Controller handler is missing.");
+		}
+
+		const request = new Request(req, {});
+		const handlers = [...(route ? route.handlers : [])];
+
+		if (handlers.length > 0) {
+			this.executeHandlers(handlers, request, response);
+		}
+
+		await route.controller(request, response, () => {});
+
+		return response.parse();
+	}
+
+	private executeHandlers(handlers: Handler[], req: Request, res: Response): void {
+		const execute = (index: number): void => {
+			console.log(handlers[index]);
+
+			if (handlers.length > index) {
+				handlers[index](req, res, () => execute(index + 1));
+			}
+		};
+
+		execute(0);
+	}
 }

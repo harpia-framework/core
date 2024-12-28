@@ -26,7 +26,8 @@
 				"noExplicitAny": "off"
 			},
 			"complexity": {
-				"noBannedTypes": "off"
+				"noBannedTypes": "off",
+				"noUselessConstructor": "off"
 			}
 		}
 	},
