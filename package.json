@@ -27,7 +27,8 @@
 		".": "./index.ts",
 		"./request": "./src/request.ts",
 		"./response": "./src/response.ts",
-		"./cache": "./src/cache.ts"
+		"./cache": "./src/cache.ts",
+		"./session": "./src/session.ts"
 	},
 	"config": {
 		"commitizen": {
