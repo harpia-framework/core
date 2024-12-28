@@ -8,6 +8,7 @@ import { Router } from "./router";
 import type { FetchRequest } from "./request";
 import type { FetchResponse } from "./response";
 import type { CorsOptions } from "./types/cors";
+import type { Engine } from "./types/engine";
 import type { Handler } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
@@ -20,6 +21,12 @@ export class Application {
 	private corsInstance: Cors;
 	private notFound: NotFoundTypes = null;
 	private staticPath: string | null = null;
+	private templateEngine: Engine | null = null;
+
+	public engine = {
+		set: (engine: Engine) => this.setTemplateEngine(engine),
+		get: () => this.getTemplateEngine(),
+	};
 
 	private constructor() {
 		this.router = Router.getInstance();
@@ -187,5 +194,13 @@ export class Application {
 		};
 
 		execute(0);
+	}
+
+	private setTemplateEngine(engine: Engine): void {
+		this.templateEngine = engine;
+	}
+
+	private getTemplateEngine(): Engine | null {
+		return this.templateEngine;
 	}
 }
