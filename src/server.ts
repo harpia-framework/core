@@ -1,3 +1,4 @@
+import path from "node:path";
 import { Middleware } from "./middlewares";
 import { Response } from "./response";
 import { Router } from "./router";
@@ -11,6 +12,7 @@ export class Application {
 
 	private router: Router;
 	private middlewares: Middleware;
+	private staticPath: string | null = null;
 
 	private constructor() {
 		this.router = Router.getInstance();
@@ -48,6 +50,10 @@ export class Application {
 		}
 	}
 
+	public static(path: string): void {
+		this.staticPath = path;
+	}
+
 	public get(path: string, ...handlers: Handler[]): void {
 		this.router.get(path, ...handlers);
 	}
@@ -76,13 +82,40 @@ export class Application {
 		this.router.head(path, ...handlers);
 	}
 
+	private async resolveStaticFiles(urlPath: string, res: Response): Promise<boolean> {
+		if (this.staticPath) {
+			const filePath = path.join(this.staticPath, urlPath);
+			const file = Bun.file(filePath);
+			const fileExists = await file.exists();
+
+			if (fileExists) {
+				const fileType = file.type || "application/octet-stream";
+				const fileContent = await file.arrayBuffer();
+
+				res.headers.set("Content-Type", fileType);
+				res.send(new Uint8Array(fileContent));
+
+				return true;
+			}
+
+			return false;
+		}
+
+		return false;
+	}
+
 	private async handleRequest(req: FetchRequest): Promise<FetchResponse> {
 		const response = new Response();
 
 		const urlPath = new URL(req.url).pathname;
 		const route = this.router.isRouteMatching(urlPath, req.method);
+		const staticFileExists = await this.resolveStaticFiles(urlPath, response);
 
 		if (!route) {
+			if (this.staticPath && staticFileExists) {
+				return response.parse();
+			}
+
 			return response.parse();
 		}
 
