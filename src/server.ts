@@ -42,7 +42,7 @@ export class Application {
 		return Application.instance;
 	}
 
-	public listen(port: number, handler: () => void) {
+	public listen(port: number, handler?: () => void) {
 		Bun.serve({
 			port,
 			fetch: this.handleRequest.bind(this),
