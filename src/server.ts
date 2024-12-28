@@ -1,17 +1,21 @@
 import path from "node:path";
 import { Middleware } from "./middlewares";
+import { Request } from "./request";
 import { Response } from "./response";
 import { Router } from "./router";
 
 import type { FetchRequest } from "./request";
 import type { FetchResponse } from "./response";
 import type { Handler } from "./types/handler";
+import type { NotFoundTypes } from "./types/not-found";
+import type { MethodOptions } from "./types/router";
 
 export class Application {
 	private static instance: Application | null = null;
 
 	private router: Router;
 	private middlewares: Middleware;
+	private notFound: NotFoundTypes = null;
 	private staticPath: string | null = null;
 
 	private constructor() {
@@ -50,6 +54,13 @@ export class Application {
 		}
 	}
 
+	public setNotFound(handler: Handler, methods?: MethodOptions[]): void {
+		this.notFound = {
+			handler,
+			methods,
+		};
+	}
+
 	public static(path: string): void {
 		this.staticPath = path;
 	}
@@ -80,6 +91,22 @@ export class Application {
 
 	public head(path: string, ...handlers: Handler[]): void {
 		this.router.head(path, ...handlers);
+	}
+
+	private resolveNotFound(req: FetchRequest, res: Response, urlPath: string) {
+		if (this.notFound) {
+			const request = new Request(req, {}, req.url, urlPath);
+
+			if (!this.notFound.methods) {
+				return this.notFound.handler(request, res, () => {});
+			}
+
+			for (const method of this.notFound.methods) {
+				if (method === req.method) {
+					return this.notFound.handler(request, res, () => {});
+				}
+			}
+		}
 	}
 
 	private async resolveStaticFiles(urlPath: string, res: Response): Promise<boolean> {
@@ -116,6 +143,8 @@ export class Application {
 				return response.parse();
 			}
 
+			this.resolveNotFound(req, response, urlPath);
+
 			return response.parse();
 		}
 
@@ -123,7 +152,7 @@ export class Application {
 			throw new Error("Controller handler is missing.");
 		}
 
-		const request = new Request(req, {});
+		const request = new Request(req, {}, req.url, urlPath);
 		const handlers = [...this.middlewares.isMiddlewareMatching(urlPath), ...(route ? route.handlers : [])];
 		if (handlers.length > 0) {
 			this.executeHandlers(handlers, request, response);
