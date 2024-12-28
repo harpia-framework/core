@@ -26,7 +26,8 @@
 	"exports": {
 		".": "./index.ts",
 		"./request": "./src/request.ts",
-		"./response": "./src/response.ts"
+		"./response": "./src/response.ts",
+		"./cache": "./src/cache.ts"
 	},
 	"config": {
 		"commitizen": {
