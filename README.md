@@ -3,12 +3,18 @@
 Harpia Core is the foundational module of the Harpia Framework, designed exclusively for the Bun runtime. Like Express, Fastify, or Hono, it can be used independently, offering a lightweight yet powerful foundation for building modern web applications optimized for Bun.
 
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%204.x-blue.svg)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D%205.x-blue.svg)](https://www.typescriptlang.org/)
 
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
 
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpia-framework/core/blob/main/LICENSE)
 
+
+## Installation
+
+```bash
+  bun add harpiats
+```
 
 ## Features
 
@@ -814,3 +820,9 @@ const redisClient = createClient({
 ---
 
 This setup provides a robust and scalable way to manage sessions in Redis, leveraging `connect-redis` and the `redis` client. It ensures your application is efficient in terms of storage and easily scalable.
+
+
+## Authors
+
+- [@lucasnjsilva](https://www.github.com/lucasnjsilva)
+

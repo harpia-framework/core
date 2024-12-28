@@ -1,5 +1,5 @@
 {
-	"name": "harpia",
+	"name": "harpiats",
 	"module": "index.ts",
 	"type": "module",
 	"bin": "./index.ts",
@@ -9,9 +9,16 @@
 		"commit": "cz"
 	},
 	"author": {
-		"name": "Lucas Nathan"
+		"name": "Lucas Nathan",
+		"url": "https://github.com/lucasnjsilva"
 	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/harpia-framework/core"
+	},
+	"homepage": "https://github.com/harpia-framework/core",
 	"description": "Harpia Framework is designed exclusively for the Bun runtime. Like Express, Fastify, or Hono, it can be used independently, offering a lightweight yet powerful foundation for building modern web applications optimized for Bun.",
+	"keywords": ["harpia", "bun", "framework", "web", "api"],
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",
 		"@commitlint/cli": "^19.6.1",
