@@ -37,6 +37,7 @@ class ResponseWrapper {
 
 	public status(value: number): this {
 		this.statusCode = value;
+
 		return this;
 	}
 
@@ -49,6 +50,13 @@ class ResponseWrapper {
 	public json(data: any): this {
 		this.headersInstance.set("Content-Type", "application/json");
 		this.body = JSON.stringify(data);
+		return this;
+	}
+
+	public redirect(url: string, statusCode = 302): this {
+		this.statusCode = statusCode;
+		this.headersInstance.set("Location", url);
+		this.body = `Redirecting to ${url}`;
 		return this;
 	}
 
