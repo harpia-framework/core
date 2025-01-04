@@ -2,23 +2,23 @@ import type { Handler } from "./types/handler";
 import type { RouteInterface } from "./types/router";
 
 export class Router {
-	private static instance: Router | null = null;
 	private routes: RouteInterface[];
 
-	private constructor() {
+	constructor() {
 		this.routes = [];
 	}
 
-	public static getInstance(): Router {
-		if (!Router.instance) {
-			Router.instance = new Router();
+	public register({ routes, prefix }: { routes: RouteInterface[]; prefix?: string }): void {
+		let routesWithPrefix: RouteInterface[] = routes;
+
+		if (prefix) {
+			routesWithPrefix = routes.map((route) => {
+				route.path = `${prefix}${route.path}`;
+				return route;
+			});
 		}
 
-		return Router.instance;
-	}
-
-	public register(routes: RouteInterface[]): void {
-		this.routes.push(...routes);
+		this.routes.push(...routesWithPrefix);
 	}
 
 	public list(): RouteInterface[] {
