@@ -5,16 +5,18 @@ import { Request } from "./request";
 import { Response } from "./response";
 import { Router } from "./router";
 
+import type { Server } from "bun";
 import type { FetchRequest } from "./request";
 import type { FetchResponse } from "./response";
 import type { CorsOptions } from "./types/cors";
 import type { Engine } from "./types/engine";
-import type { Handler } from "./types/handler";
+import type { Handler, HandlerResult } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
 
 export class Application {
 	private static instance: Application | null = null;
+	private serverInstance: Server | null = null;
 
 	private router: Router;
 	private middlewares: Middleware;
@@ -29,7 +31,7 @@ export class Application {
 	};
 
 	private constructor() {
-		this.router = Router.getInstance();
+		this.router = new Router();
 		this.middlewares = new Middleware();
 		this.corsInstance = new Cors();
 	}
@@ -43,7 +45,7 @@ export class Application {
 	}
 
 	public listen(port: number, handler?: () => void) {
-		Bun.serve({
+		this.serverInstance = Bun.serve({
 			port,
 			fetch: this.handleRequest.bind(this),
 		});
@@ -53,8 +55,22 @@ export class Application {
 		}
 	}
 
+	public stop(): void {
+		if (this.serverInstance) {
+			this.serverInstance.stop();
+		}
+	}
+
+	public server(): Server {
+		if (!this.serverInstance) {
+			throw new Error("Server is not running.");
+		}
+
+		return this.serverInstance;
+	}
+
 	public routes(routes: Router): void {
-		this.router.register(routes.list());
+		this.router.register({ routes: routes.list() });
 	}
 
 	public use(app: Application | string | Handler, handler?: Handler): void {
@@ -177,8 +193,13 @@ export class Application {
 
 		const request = new Request(req, {}, req.url, route.path);
 		const handlers = [...this.middlewares.isMiddlewareMatching(urlPath), ...(route ? route.handlers : [])];
+
 		if (handlers.length > 0) {
-			this.executeHandlers(handlers, request, response);
+			const execution = await this.executeHandlers(handlers, request, response, () => {});
+
+			if (execution instanceof Response) {
+				return execution.parse();
+			}
 		}
 
 		await route.controller(request, response, () => {});
@@ -186,14 +207,19 @@ export class Application {
 		return response.parse();
 	}
 
-	private executeHandlers(handlers: Handler[], req: Request, res: Response): void {
-		const execute = (index: number): void => {
-			if (handlers.length > index) {
-				handlers[index](req, res, () => execute(index + 1));
+	private async executeHandlers(
+		handlers: Handler[],
+		req: Request,
+		res: Response,
+		next: () => void,
+	): Promise<HandlerResult> {
+		for (const handler of handlers) {
+			if (typeof handler !== "function") {
+				throw new Error("Middleware handler must be a function.");
 			}
-		};
 
-		execute(0);
+			return await handler(req, res, next);
+		}
 	}
 
 	private setTemplateEngine(engine: Engine): void {
