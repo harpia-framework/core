@@ -124,6 +124,10 @@ export class Application {
 		this.router.head(path, ...handlers);
 	}
 
+	public async processRequest(req: FetchRequest): Promise<FetchResponse> {
+		return this.handleRequest(req);
+	}
+
 	private resolveNotFound(req: FetchRequest, res: Response, urlPath: string) {
 		if (this.notFound) {
 			const request = new Request(req, {}, req.url, urlPath);
@@ -172,7 +176,6 @@ export class Application {
 				return response.parse();
 			}
 		}
-
 		const urlPath = new URL(req.url).pathname;
 		const route = this.router.isRouteMatching(urlPath, req.method);
 		const staticFileExists = await this.resolveStaticFiles(urlPath, response);
