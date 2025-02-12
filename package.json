@@ -36,7 +36,9 @@
 		"./response": "./src/response.ts",
 		"./cache": "./src/cache.ts",
 		"./session": "./src/session.ts",
-		"./upload": "./src/upload.ts"
+		"./upload": "./src/upload.ts",
+		"./shield": "./src/shield.ts",
+		"./monitor": "./src/monitor.ts"
 	},
 	"config": {
 		"commitizen": {

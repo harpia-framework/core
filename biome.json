@@ -29,6 +29,9 @@
 			"complexity": {
 				"noBannedTypes": "off",
 				"noUselessConstructor": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off"
 			}
 		}
 	},
