@@ -37,7 +37,7 @@ class RequestWrapper extends Request {
 
 	private extractQuery(url: string): Record<string, string> {
 		const parsedUrl = new URL(url);
-		const qs = new URL(url, parsedUrl.host).search;
+		const qs = parsedUrl.search;
 		const query = new URLSearchParams(qs);
 		const mapper: Record<string, string> = {};
 
