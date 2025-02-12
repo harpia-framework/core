@@ -17,6 +17,7 @@ import type { MethodOptions } from "./types/router";
 export class Application {
 	private static instance: Application | null = null;
 	private serverInstance: Server | null = null;
+	private ipAdress: string | null = null;
 
 	private router: Router;
 	private middlewares: Middleware;
@@ -69,15 +70,23 @@ export class Application {
 		return this.serverInstance;
 	}
 
+	private setRequestIP(req: FetchRequest, server: Server): void {
+		this.ipAdress = server.requestIP(req)?.address || null;
+	}
+
+	public requestIP(): string | null {
+		return this.ipAdress;
+	}
+
 	public routes(routes: Router): void {
 		this.router.register({ routes: routes.list() });
 	}
 
 	public use(app: Application | string | Handler, handler?: Handler): void {
 		if (typeof app === "string" && handler) {
-			this.middlewares.setMiddleware(app, handler);
+			this.middlewares.set(app, handler);
 		} else {
-			this.middlewares.setMiddleware("*", app as Handler);
+			this.middlewares.set("*", app as Handler);
 		}
 	}
 
@@ -166,7 +175,11 @@ export class Application {
 		return false;
 	}
 
-	private async handleRequest(req: FetchRequest): Promise<FetchResponse> {
+	private async handleRequest(req: FetchRequest, server?: Server): Promise<FetchResponse> {
+		if (server) {
+			this.setRequestIP(req, server);
+		}
+
 		const response = new Response();
 
 		if (this.corsInstance.options) {
@@ -195,10 +208,21 @@ export class Application {
 		}
 
 		const request = new Request(req, {}, req.url, route.path);
-		const handlers = [...this.middlewares.isMiddlewareMatching(urlPath), ...(route ? route.handlers : [])];
 
+		// Execute global middlewares
+		const middlewareList = this.middlewares.isMiddlewareMatching(urlPath);
+		if (middlewareList.length > 0) {
+			const execution = await this.executeHandlers(middlewareList, request, response);
+
+			if (execution instanceof Response) {
+				return execution.parse();
+			}
+		}
+
+		// Execute route middlewares
+		const handlers = [...(route ? route.handlers : [])];
 		if (handlers.length > 0) {
-			const execution = await this.executeHandlers(handlers, request, response, () => {});
+			const execution = await this.executeHandlers(handlers, request, response);
 
 			if (execution instanceof Response) {
 				return execution.parse();
@@ -210,19 +234,32 @@ export class Application {
 		return response.parse();
 	}
 
-	private async executeHandlers(
-		handlers: Handler[],
-		req: Request,
-		res: Response,
-		next: () => void,
-	): Promise<HandlerResult> {
-		for (const handler of handlers) {
-			if (typeof handler !== "function") {
-				throw new Error("Middleware handler must be a function.");
+	private async executeHandlers(handlers: Handler[], req: Request, res: Response): Promise<HandlerResult> {
+		let index = -1;
+
+		const next = async (): Promise<HandlerResult> => {
+			index++;
+
+			if (index < handlers.length) {
+				const handler = handlers[index];
+
+				if (typeof handler !== "function") {
+					throw new Error("Middleware handler must be a function.");
+				}
+
+				const result = await handler(req, res, next);
+
+				if (result instanceof Response) {
+					return result;
+				}
+
+				return next();
 			}
 
-			return await handler(req, res, next);
-		}
+			return undefined;
+		};
+
+		return await next();
 	}
 
 	private setTemplateEngine(engine: Engine): void {
