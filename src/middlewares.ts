@@ -7,8 +7,12 @@ export class Middleware {
 		this.middlewares = [];
 	}
 
-	public setMiddleware(path: string, handler: Handler): void {
+	public set(path: string, handler: Handler): void {
 		this.middlewares.push({ path, handler });
+	}
+
+	public all(): { path: string; handler: Handler }[] {
+		return this.middlewares;
 	}
 
 	public isMiddlewareMatching(urlPath: string): Handler[] {

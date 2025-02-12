@@ -3,9 +3,11 @@ import type { RouteInterface } from "./types/router";
 
 export class Router {
 	private routes: RouteInterface[];
+	private prefix: string;
 
-	constructor() {
+	constructor(prefix?: string) {
 		this.routes = [];
+		this.prefix = prefix || "";
 	}
 
 	public register({ routes, prefix }: { routes: RouteInterface[]; prefix?: string }): void {
@@ -23,6 +25,10 @@ export class Router {
 
 	public list(): RouteInterface[] {
 		return this.routes;
+	}
+
+	public getPrefix(): string {
+		return this.prefix;
 	}
 
 	public get(path: string, ...handlers: Handler[]): this {
