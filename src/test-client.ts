@@ -154,7 +154,9 @@ export class TestClient {
 			for (const value of values) {
 				if (typeof value === "string") {
 					const file = Bun.file(value);
-					if (!file.size) {
+					const fileExists = file.exists().then((exists) => exists);
+
+					if (!fileExists) {
 						throw new Error(`File not found at path: ${value}`);
 					}
 
@@ -172,7 +174,8 @@ export class TestClient {
 	}
 
 	public async execute(): Promise<FetchResponse> {
-		const request = new Request(`${this.baseUrl}${this.url}`, {
+		const url = `${this.baseUrl}${this.url}`;
+		const request = new Request(url, {
 			method: this.method,
 			headers: this.headersInstance,
 			body: this.bodyType === "json" ? JSON.stringify(this.body) : this.body,
