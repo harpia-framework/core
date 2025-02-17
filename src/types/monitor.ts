@@ -1,3 +1,5 @@
+import type { Store } from "./store";
+
 export interface VisitorData {
 	totalRequests: number;
 	pagesVisited: { path: string; timestamp: string; trafficSource?: TrafficSource }[];
@@ -28,3 +30,8 @@ export interface TrafficSource {
 	term?: string;
 	content?: string;
 }
+
+export type Options = {
+	store?: Store;
+	ignore?: string[];
+};

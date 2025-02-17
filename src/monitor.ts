@@ -1,42 +1,53 @@
 import { MemoryStore } from "./memory-store";
-import type { MonitorInterface, TrafficSource, VisitorData } from "./types/monitor";
+import type { MonitorInterface, Options, TrafficSource, VisitorData } from "./types/monitor";
 import type { Store } from "./types/store";
-
-const monitor: MonitorInterface = {
-	access: {
-		visitorsByDate: new Map<string, Map<string, VisitorData>>(),
-		totalRequests: 0,
-	},
-	behavior: {
-		pageViews: new Map<string, number>(),
-	},
-};
 
 export class RequestMonitor {
 	private request: Request | null = null;
 	private clientIp: string | null = null;
 	private trafficSource: TrafficSource | null = null;
 	private store: Store;
+	private ignoredPaths: string[];
 
-	constructor(store?: Store) {
+	constructor({ store, ignore }: Options) {
 		this.store = store || new MemoryStore();
+		this.ignoredPaths = ignore || [];
 	}
 
-	/**
-	 * Initializes the Monitor instance with request data.
-	 */
-	public initialize(request: Request, clientIp: string, trafficSource?: TrafficSource): void {
+	public async initialize(request: Request, clientIp: string, trafficSource?: TrafficSource): Promise<void> {
 		this.request = request;
 		this.clientIp = clientIp;
 		this.trafficSource = trafficSource || null;
 	}
 
-	/**
-	 * Converts a Map to a plain object.
-	 * Handles nested Maps recursively.
-	 */
+	private ignorePath(path: string, ignoredPath: string): boolean {
+		if (!ignoredPath.startsWith("/")) {
+			ignoredPath = `/${ignoredPath}`;
+		}
+
+		if (path !== ignoredPath) {
+			return false;
+		}
+
+		return true;
+	}
+
+	private getClientIp(): string {
+		if (!this.request || !this.clientIp) {
+			throw new Error("Monitor has not been initialized with request data");
+		}
+
+		const headers = this.request.headers;
+		const ipFromSocket = this.clientIp || "unknown";
+		const ipFromHeaders =
+			headers.get("x-forwarded-for")?.split(",")[0] || headers.get("cf-connecting-ip") || headers.get("x-real-ip");
+
+		return ipFromHeaders || ipFromSocket;
+	}
+
 	private mapToObject<K extends string | number | symbol, V>(map: Map<K, V>): Record<K, V> {
 		const obj = {} as Record<K, V>;
+
 		for (const [key, value] of map.entries()) {
 			if (value instanceof Map) {
 				obj[key] = this.mapToObject(value) as any;
@@ -44,29 +55,11 @@ export class RequestMonitor {
 				obj[key] = value;
 			}
 		}
+
 		return obj;
 	}
 
-	/**
-	 * Extracts the client's IP address from the request headers.
-	 */
-	private getClientIp(): string {
-		if (!this.request || !this.clientIp) {
-			throw new Error("Monitor not initialized with request data");
-		}
-
-		const headers = this.request.headers;
-		const ipFromHeaders =
-			headers.get("x-forwarded-for")?.split(",")[0] || headers.get("cf-connecting-ip") || headers.get("x-real-ip");
-
-		const ipFromSocket = this.clientIp || "unknown";
-		return ipFromHeaders || ipFromSocket;
-	}
-
-	/**
-	 * Saves the current metrics to the store.
-	 */
-	private async saveMetrics(): Promise<void> {
+	private async saveMetrics(monitor: MonitorInterface): Promise<void> {
 		const metrics = {
 			access: {
 				visitorsByDate: this.mapToObject(monitor.access.visitorsByDate),
@@ -76,36 +69,71 @@ export class RequestMonitor {
 				pageViews: this.mapToObject(monitor.behavior.pageViews),
 			},
 		};
+
 		await this.store.set("metrics", metrics);
 	}
 
-	/**
-	 * Retrieves the saved metrics from the store.
-	 */
 	public async getMetrics(): Promise<any> {
 		return await this.store.get("metrics");
 	}
 
-	/**
-	 * Handles an incoming HTTP request.
-	 */
+	private convertStoredMetrics(metricsObj: any): MonitorInterface {
+		const visitorsByDate = new Map<string, Map<string, VisitorData>>();
+
+		if (metricsObj.access?.visitorsByDate) {
+			for (const date in metricsObj.access.visitorsByDate) {
+				const dailyVisitorsObj = metricsObj.access.visitorsByDate[date];
+				const dailyVisitorsMap = new Map<string, VisitorData>(Object.entries(dailyVisitorsObj));
+
+				visitorsByDate.set(date, dailyVisitorsMap);
+			}
+		}
+
+		const pageViews = new Map<string, number>(Object.entries(metricsObj.behavior?.pageViews || {}));
+
+		return {
+			access: {
+				visitorsByDate,
+				totalRequests: metricsObj.access?.totalRequests || 0,
+			},
+			behavior: {
+				pageViews,
+			},
+		};
+	}
+
 	public async handleRequest(): Promise<Response | void> {
 		if (!this.request || !this.clientIp) {
-			throw new Error("Monitor not initialized with request data");
+			throw new Error("Monitor has not been initialized with request data");
 		}
 
 		try {
 			const url = new URL(this.request.url);
 			const path = url.pathname;
 
-			if (path === "/favicon.ico") {
-				return new Response(null, { status: 204 }); // No Content
+			for (const ignoredPath of this.ignoredPaths) {
+				if (this.ignorePath(path, ignoredPath)) {
+					return new Response(null, { status: 204 }); // No Content
+				}
 			}
 
 			const startTime = Date.now();
 			const clientIp = this.getClientIp();
 			const timestamp = new Date().toISOString();
 			const dateKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+
+			// Retrieve saved metrics and convert them to MonitorInterface (with Maps)
+			const storedMetrics = await this.getMetrics();
+			let monitor: MonitorInterface;
+
+			if (storedMetrics) {
+				monitor = this.convertStoredMetrics(storedMetrics);
+			} else {
+				monitor = {
+					access: { visitorsByDate: new Map(), totalRequests: 0 },
+					behavior: { pageViews: new Map() },
+				};
+			}
 
 			if (!monitor.access.visitorsByDate.has(dateKey)) {
 				monitor.access.visitorsByDate.set(dateKey, new Map<string, VisitorData>());
@@ -140,10 +168,23 @@ export class RequestMonitor {
 			const responseTime = endTime - startTime;
 			visitorData.responseTimes.push(responseTime);
 
-			await this.saveMetrics();
+			// Save updated metrics to the store
+			await this.saveMetrics(monitor);
 		} catch (error) {
 			const clientIp = this.getClientIp();
 			const dateKey = new Date().toISOString().split("T")[0];
+
+			// Try to retrieve metrics to update the error count
+			const storedMetrics = await this.getMetrics();
+			let monitor: MonitorInterface;
+			if (storedMetrics) {
+				monitor = this.convertStoredMetrics(storedMetrics);
+			} else {
+				monitor = {
+					access: { visitorsByDate: new Map(), totalRequests: 0 },
+					behavior: { pageViews: new Map() },
+				};
+			}
 
 			if (monitor.access.visitorsByDate.has(dateKey)) {
 				const dailyVisitors = monitor.access.visitorsByDate.get(dateKey)!;
@@ -152,7 +193,7 @@ export class RequestMonitor {
 				}
 			}
 
-			await this.saveMetrics();
+			await this.saveMetrics(monitor);
 
 			return new Response(JSON.stringify({ error: "An error occurred on the server" }), {
 				status: 500,
@@ -161,5 +202,3 @@ export class RequestMonitor {
 		}
 	}
 }
-
-export const Monitor = new RequestMonitor();
