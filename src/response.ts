@@ -44,6 +44,14 @@ class ResponseWrapper {
 	public send(data: any): this {
 		this.body = data;
 		this.headersInstance.set("Content-Lenght", data.length.toString());
+
+		return this;
+	}
+
+	public html(data: string): this {
+		this.body = data;
+		this.headersInstance.set("Content-Type", "text/html");
+
 		return this;
 	}
 
@@ -70,7 +78,7 @@ class ResponseWrapper {
 		try {
 			const rendered = await engine.render(view, data);
 
-			this.headers.set("Content-Type", "text/html");
+			this.headersInstance.set("Content-Type", "text/html");
 			this.body = rendered;
 		} catch (error: any) {
 			throw new Error(`Error rendering template: ${error.message}`);
