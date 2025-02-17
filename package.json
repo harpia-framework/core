@@ -38,7 +38,9 @@
 		"./session": "./src/session.ts",
 		"./upload": "./src/upload.ts",
 		"./shield": "./src/shield.ts",
-		"./monitor": "./src/monitor.ts"
+		"./monitor": "./src/monitor.ts",
+		"./memory-store": "./src/memory-store.ts",
+		"./template-engine": "./src/template-engine.ts"
 	},
 	"config": {
 		"commitizen": {
