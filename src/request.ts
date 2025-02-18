@@ -3,6 +3,7 @@ import { Cookies } from "./cookies";
 class RequestWrapper extends Request {
 	public params: Record<string, string>;
 	public query: Record<string, string>;
+	public method: string;
 
 	private cookiesInstance: Cookies;
 	public cookies = {
@@ -10,11 +11,12 @@ class RequestWrapper extends Request {
 		getAll: this.getAllCookies.bind(this),
 	};
 
-	constructor(reqInfo: RequestInfo, reqInit: RequestInit, url: string, routePath: string) {
+	constructor(reqInfo: RequestInfo, reqInit: RequestInit, url: string, routePath: string, reqMethod: string) {
 		super(reqInfo, reqInit);
 
 		this.params = this.extractParams(url, routePath);
 		this.query = this.extractQuery(url);
+		this.method = reqMethod.toUpperCase();
 		this.cookiesInstance = new Cookies(this.headers.get("Cookie") ?? undefined);
 	}
 

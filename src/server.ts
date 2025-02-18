@@ -90,8 +90,8 @@ export class Application {
 		}
 	}
 
-	public cors(options: CorsOptions) {
-		this.corsInstance.options = options;
+	public cors(options?: CorsOptions) {
+		this.corsInstance.options = options || null;
 	}
 
 	public setNotFound(handler: Handler, methods?: MethodOptions[]): void {
@@ -139,7 +139,7 @@ export class Application {
 
 	private resolveNotFound(req: FetchRequest, res: Response, urlPath: string) {
 		if (this.notFound) {
-			const request = new Request(req, {}, req.url, urlPath);
+			const request = new Request(req, {}, req.url, urlPath, req.method);
 
 			if (!this.notFound.methods) {
 				return this.notFound.handler(request, res, () => {});
@@ -175,6 +175,24 @@ export class Application {
 		return false;
 	}
 
+	private async methodOverride(req: FetchRequest, res: Response, urlPath: string): Promise<Request> {
+		const request = new Request(req, {}, req.url, urlPath, req.method);
+		const isPost = req.method === "POST";
+		const contentType = req.headers.get("content-type")?.includes("application/x-www-form-urlencoded");
+
+		if (isPost && contentType) {
+			const formData = new URLSearchParams(await req.text());
+			const overrideMethod = formData.get("_method")?.toUpperCase();
+			const validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
+
+			if (overrideMethod && validMethods.includes(overrideMethod)) {
+				request.method = overrideMethod;
+			}
+		}
+
+		return request;
+	}
+
 	private async handleRequest(req: FetchRequest, server?: Server): Promise<FetchResponse> {
 		if (server) {
 			this.setRequestIP(req, server);
@@ -189,8 +207,10 @@ export class Application {
 				return response.parse();
 			}
 		}
+
 		const urlPath = new URL(req.url).pathname;
-		const route = this.router.isRouteMatching(urlPath, req.method);
+		const request = await this.methodOverride(req, response, urlPath);
+		const route = this.router.isRouteMatching(urlPath, request.method);
 		const staticFileExists = await this.resolveStaticFiles(urlPath, response);
 
 		if (!route) {
@@ -206,8 +226,6 @@ export class Application {
 		if (!route.controller) {
 			throw new Error("Controller handler is missing.");
 		}
-
-		const request = new Request(req, {}, req.url, route.path);
 
 		// Execute global middlewares
 		const middlewareList = this.middlewares.isMiddlewareMatching(urlPath);
