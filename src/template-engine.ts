@@ -1,266 +1,317 @@
 import { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
-import { Glob } from "bun";
+import type { Application } from "./server";
+import type { Engine } from "./types/engine";
 import type { Blocks, Data, Options, PluginFunction } from "./types/template-engine";
 
-export class TemplateEngine {
-	private plugins: Record<string, PluginFunction> = {};
-	private defaultViewName?: string;
-	private viewsPath: string;
-	private layoutsPath: string;
-	private partialsPath: string;
+export class TemplateEngine implements Engine {
+  private plugins: Record<string, PluginFunction> = {};
+  private defaultViewName?: string;
+  private viewsPath: string;
+  private layoutsPath: string;
+  private partialsPath: string;
+  private useModules: boolean;
+  private currentModule: string | null = null;
 
-	constructor(options: Options) {
-		this.viewsPath = options.path.viewsPath;
-		this.layoutsPath = options.path.layoutsPath;
-		this.partialsPath = options.path.partialsPath;
-		this.defaultViewName = options.viewName;
-	}
+  constructor(options: Options) {
+    this.viewsPath = options.path.viewsPath;
+    this.layoutsPath = options.path.layoutsPath;
+    this.partialsPath = options.path.partialsPath;
+    this.defaultViewName = options.viewName;
+    this.useModules = options.useModules ?? false;
+  }
 
-	public async render(templateName: string, data: Data = {}): Promise<string> {
-		const viewFilePath = await this.resolveViewPath(templateName);
-		const viewContent = await this.readFile(viewFilePath);
-		const layoutName = this.extractLayout(viewContent);
-		const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+  public configure(app: Application): void {
+    app.engine.set(this);
+  }
 
-		if (remainingView.trim() && !blocks.body) {
-			blocks.body = remainingView;
-		}
+  public module(moduleName: string): this {
+    this.currentModule = moduleName;
+    return this;
+  }
 
-		let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
+  public async render(templateName: string, data: Data = {}): Promise<string> {
+    const viewFilePath = await this.viewFilePathResolver(templateName);
+    const viewContent = await this.readFile(viewFilePath);
+    const layoutName = this.extractLayout(viewContent);
+    const { blocks, content: remainingView } = this.extractBlocks(viewContent);
 
-		finalContent = await this.processPartials(finalContent, data);
-		finalContent = await this.processInclude(finalContent, path.dirname(viewFilePath), data);
-		finalContent = this.processOperations(finalContent, data);
-		finalContent = this.interpolateVariables(finalContent, data);
-		finalContent = this.removeComments(finalContent);
+    if (remainingView.trim() && !blocks.body) {
+      blocks.body = remainingView;
+    }
 
-		return finalContent;
-	}
+    let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
 
-	public registerPlugin(name: string, fn: PluginFunction): void {
-		this.plugins[name] = fn;
-	}
+    finalContent = await this.processPartials(finalContent, data);
+    finalContent = await this.processInclude(finalContent, path.dirname(viewFilePath), data);
+    finalContent = this.processOperations(finalContent, data);
+    finalContent = this.interpolateVariables(finalContent, data);
+    finalContent = this.removeComments(finalContent);
 
-	private async resolveViewPath(templateName: string): Promise<string> {
-		if (this.viewsPath.includes("**")) {
-			const globPattern = this.defaultViewName
-				? path.join(this.viewsPath, templateName, `${this.defaultViewName}.html`)
-				: path.join(this.viewsPath, `${templateName}.html`);
+    return finalContent;
+  }
 
-			const glob = new Glob(globPattern);
-			const files = Array.from(glob.scanSync());
+  public registerPlugin(name: string, fn: PluginFunction): void {
+    this.plugins[name] = fn;
+  }
 
-			if (files.length === 0) {
-				throw new Error(`No files found for pattern: ${globPattern}`);
-			}
+  private async viewFilePathResolver(templateName: string): Promise<string> {
+    if (this.useModules) {
+      return await this.resolveViewPathWithModules(templateName);
+    }
 
-			return files[0];
-		}
+    return await this.resolveViewPath(templateName);
+  }
 
-		return this.defaultViewName
-			? path.join(this.viewsPath, templateName, `${this.defaultViewName}.html`)
-			: path.join(this.viewsPath, `${templateName}.html`);
-	}
+  private async resolveViewPath(templateName: string): Promise<string> {
+    const baseViewPath = this.viewsPath;
+    const filePath = this.defaultViewName
+      ? path.join(baseViewPath, templateName, `${this.defaultViewName}.html`)
+      : path.join(baseViewPath, `${templateName}.html`);
 
-	private async readFile(filePath: string): Promise<string> {
-		try {
-			return await readFile(filePath, "utf-8");
-		} catch (error) {
-			throw new Error("Error reading file.");
-		}
-	}
+    const absolutePath = path.resolve(filePath);
 
-	private extractLayout(content: string): string | null {
-		const match = content.match(/{{=\s*layout\(["'](.+?)["']\)\s*}}/);
+    if (!(await Bun.file(absolutePath).exists())) {
+      throw new Error(`No files found: ${absolutePath}`);
+    }
 
-		return match ? match[1] : null;
-	}
+    return absolutePath;
+  }
 
-	private extractBlocks(content: string): { blocks: Blocks; content: string } {
-		const blocks: Blocks = {};
-		const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
+  private async resolveViewPathWithModules(templateName: string): Promise<string> {
+    let moduleOverride: string | null = null;
+    let viewName = templateName;
 
-		const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
-			// if (blockContent.length > 10000) {
-			// 	throw new Error("Conteúdo do bloco muito grande");
-			// }
+    const moduleRegex = /^\*(\w+)\*\/(.*)$/;
+    const match = templateName.match(moduleRegex);
 
-			blocks[blockName] = blockContent;
-			return "";
-		});
+    if (match) {
+      moduleOverride = match[1];
+      viewName = match[2];
+    } else {
+      moduleOverride = this.currentModule;
+    }
 
-		return { blocks, content: remainingContent };
-	}
+    if (!moduleOverride) {
+      throw new Error("View path must include a module.");
+    }
 
-	private async applyLayout(layoutName: string, blocks: Blocks): Promise<string> {
-		const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}.html`));
+    let effectiveViewsPath = this.viewsPath;
+    if (this.viewsPath.includes("**") && moduleOverride) {
+      effectiveViewsPath = this.viewsPath.replace("**", moduleOverride);
+    }
 
-		return layoutContent.replace(
-			/{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g,
-			(_, blockName) => blocks[blockName] || "",
-		);
-	}
+    const filePath = this.defaultViewName
+      ? path.join(effectiveViewsPath, viewName, `${this.defaultViewName}.html`)
+      : path.join(effectiveViewsPath, `${viewName}.html`);
 
-	private async processPartials(content: string, data: Data): Promise<string> {
-		const partialRegex = /{{=\s*partials?\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
-		const matches = [...content.matchAll(partialRegex)];
+    const absolutePath = path.resolve(filePath);
 
-		for (const match of matches) {
-			const partialName = match[1];
-			const partialParams = match[2] ? this.evaluateExpression(match[2], data) : {};
+    if (!(await Bun.file(absolutePath).exists())) {
+      throw new Error(`No files found: ${absolutePath}`);
+    }
 
-			const partialContent = await this.readFile(join(this.partialsPath, `${partialName}.html`));
-			const renderedPartial = this.interpolateVariables(partialContent, { ...data, ...partialParams });
+    return absolutePath;
+  }
 
-			content = content.replace(match[0], renderedPartial);
-		}
+  private async readFile(filePath: string): Promise<string> {
+    try {
+      return await readFile(filePath, "utf-8");
+    } catch (error) {
+      throw new Error("Error reading file.");
+    }
+  }
 
-		return content;
-	}
+  private extractLayout(content: string): string | null {
+    const match = content.match(/{{=\s*layout\(["'](.+?)["']\)\s*}}/);
 
-	private async processInclude(content: string, currentDir: string, data: Data): Promise<string> {
-		const includeRegex = /{{=\s*include\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
-		const matches = [...content.matchAll(includeRegex)];
+    return match ? match[1] : null;
+  }
 
-		for (const match of matches) {
-			const includePath = match[1];
-			const includeParams = match[2] ? this.evaluateExpression(match[2], data) : {};
+  private extractBlocks(content: string): { blocks: Blocks; content: string } {
+    const blocks: Blocks = {};
+    const blockRegex = /{{=\s*block\(["'](.+?)["']\)\s*}}([\s\S]*?){{=\s*endblock\s*}}/g;
 
-			const fullPath = join(currentDir, `${includePath}.html`);
-			const includeContent = await this.readFile(fullPath);
-			const renderedInclude = this.interpolateVariables(includeContent, { ...data, ...includeParams });
+    const remainingContent = content.replace(blockRegex, (_, blockName, blockContent) => {
+      // if (blockContent.length > 10000) {
+      // 	throw new Error("Conteúdo do bloco muito grande");
+      // }
 
-			content = content.replace(match[0], renderedInclude);
-		}
+      blocks[blockName] = blockContent;
+      return "";
+    });
 
-		return content;
-	}
+    return { blocks, content: remainingContent };
+  }
 
-	private processOperations(content: string, data: Data): string {
-		content = this.extractVariables(content, data);
-		content = this.processConditionals(content, data);
-		content = this.processLoops(content, data);
+  private async applyLayout(layoutName: string, blocks: Blocks): Promise<string> {
+    const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}.html`));
 
-		return content;
-	}
+    return layoutContent.replace(
+      /{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g,
+      (_, blockName) => blocks[blockName] || "",
+    );
+  }
 
-	private extractVariables(content: string, data: Data): string {
-		return content.replace(/{{~\s*var\s+(\w+)\s*=\s*(.+?)\s*}}/g, (_, varName, value) => {
-			data[varName] = this.evaluateExpression(value, data);
-			return "";
-		});
-	}
+  private async processPartials(content: string, data: Data): Promise<string> {
+    const partialRegex = /{{=\s*partials?\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const matches = [...content.matchAll(partialRegex)];
 
-	private processConditionals(content: string, data: Data): string {
-		return content.replace(
-			/{{~\s*if\((.+?)\)\s*}}([\s\S]*?)({{~\s*else\s*}}([\s\S]*?))?{{~\s*endif\s*}}/g,
-			(_, condition, ifBlock, elseBlock, elseContent) => {
-				return this.evaluateExpression(condition, data) ? ifBlock : elseContent || "";
-			},
-		);
-	}
+    for (const match of matches) {
+      const partialName = match[1];
+      const partialParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-	private processLoops(content: string, data: Data): string {
-		return content.replace(
-			/{{~\s*for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\s*}}([\s\S]*?){{~\s*endfor\s*}}/g,
-			(_, keyName, valueName, itemName, listName, blockContent) => {
-				const list = this.resolveVariable(listName, data) || [];
+      const partialContent = await this.readFile(join(this.partialsPath, `${partialName}.html`));
+      const renderedPartial = this.interpolateVariables(partialContent, { ...data, ...partialParams });
 
-				if (keyName && valueName) {
-					return Object.entries(list)
-						.map(([key, value]) =>
-							this.interpolateVariables(blockContent, { ...data, [keyName]: key, [valueName]: value }),
-						)
-						.join("");
-				}
+      content = content.replace(match[0], renderedPartial);
+    }
 
-				return list.map((item: any) => this.interpolateVariables(blockContent, { ...data, [itemName]: item })).join("");
-			},
-		);
-	}
+    return content;
+  }
 
-	private interpolateVariables(content: string, data: Data): string {
-		content = content.replace(/{{{\s*(.+?)\s*}}}/gs, (_, expression) => {
-			return this.processExpression(expression, data, false);
-		});
+  private async processInclude(content: string, currentDir: string, data: Data): Promise<string> {
+    const includeRegex = /{{=\s*include\(["'](.+?)["'](?:,\s*(.+?))?\)\s*}}/g;
+    const matches = [...content.matchAll(includeRegex)];
 
-		content = content.replace(/{{\s*(.+?)\s*}}/gs, (_, expression) => {
-			return this.processExpression(expression, data, true);
-		});
+    for (const match of matches) {
+      const includePath = match[1];
+      const includeParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-		return content;
-	}
+      const fullPath = join(currentDir, `${includePath}.html`);
+      const includeContent = await this.readFile(fullPath);
+      const renderedInclude = this.interpolateVariables(includeContent, { ...data, ...includeParams });
 
-	private processExpression(expression: string, data: Data, shouldEscape: boolean): string {
-		expression = expression.trim();
+      content = content.replace(match[0], renderedInclude);
+    }
 
-		// 1. Check variable
-		const variableValue = this.resolveVariable(expression, data);
-		if (variableValue !== undefined && variableValue !== null) {
-			return shouldEscape ? this.escapeHtml(variableValue) : variableValue;
-		}
+    return content;
+  }
 
-		// 2. Check plugin
-		const pluginResult = this.callPlugin(expression, data);
-		if (pluginResult !== undefined && pluginResult !== null) {
-			return shouldEscape ? this.escapeHtml(pluginResult) : pluginResult;
-		}
+  private processOperations(content: string, data: Data): string {
+    content = this.extractVariables(content, data);
+    content = this.processConditionals(content, data);
+    content = this.processLoops(content, data);
 
-		// 3. Evaluates JS expression
-		try {
-			const evaluated = this.evaluateExpression(expression, data);
-			if (evaluated !== undefined && evaluated !== null) {
-				return shouldEscape ? this.escapeHtml(evaluated) : evaluated;
-			}
-		} catch {
-			// If the expression fails, it returns an empty string.
-		}
+    return content;
+  }
 
-		return "";
-	}
+  private extractVariables(content: string, data: Data): string {
+    return content.replace(/{{~\s*var\s+(\w+)\s*=\s*(.+?)\s*}}/g, (_, varName, value) => {
+      data[varName] = this.evaluateExpression(value, data);
+      return "";
+    });
+  }
 
-	private resolveVariable(varName: string, data: Data): any {
-		return varName.split(".").reduce((acc, key) => acc?.[key], data);
-	}
+  private processConditionals(content: string, data: Data): string {
+    return content.replace(
+      /{{~\s*if\((.+?)\)\s*}}([\s\S]*?)({{~\s*else\s*}}([\s\S]*?))?{{~\s*endif\s*}}/g,
+      (_, condition, ifBlock, elseBlock, elseContent) => {
+        return this.evaluateExpression(condition, data) ? ifBlock : elseContent || "";
+      },
+    );
+  }
 
-	private evaluateExpression(expression: string, data: Data): any {
-		try {
-			return new Function(...Object.keys(data), `return ${expression};`)(...Object.values(data));
-		} catch {
-			return null;
-		}
-	}
+  private processLoops(content: string, data: Data): string {
+    return content.replace(
+      /{{~\s*for\s+(?:\[(\w+),\s*(\w+)\]|(\w+))\s+in\s+(.+?)\s*}}([\s\S]*?){{~\s*endfor\s*}}/g,
+      (_, keyName, valueName, itemName, listName, blockContent) => {
+        const list = this.resolveVariable(listName, data) || [];
 
-	private callPlugin(expression: string, data: Data): string | null {
-		const match = expression.match(/^(\w+)\((.*?)\)$/);
-		if (!match) return null;
+        if (keyName && valueName) {
+          return Object.entries(list)
+            .map(([key, value]) =>
+              this.interpolateVariables(blockContent, { ...data, [keyName]: key, [valueName]: value }),
+            )
+            .join("");
+        }
 
-		const [_, pluginName, argsString] = match;
-		const args = argsString.split(",").map((arg) => this.resolveVariable(arg.trim(), data) ?? arg.trim());
+        return list.map((item: any) => this.interpolateVariables(blockContent, { ...data, [itemName]: item })).join("");
+      },
+    );
+  }
 
-		if (this.plugins[pluginName]) {
-			return this.plugins[pluginName](...args);
-		}
+  private interpolateVariables(content: string, data: Data): string {
+    content = content.replace(/{{{\s*(.+?)\s*}}}/gs, (_, expression) => {
+      return this.processExpression(expression, data, false);
+    });
 
-		return null;
-	}
+    content = content.replace(/{{\s*(.+?)\s*}}/gs, (_, expression) => {
+      return this.processExpression(expression, data, true);
+    });
 
-	private removeComments(content: string): string {
-		return content.replace(/##.*$/gm, "");
-	}
+    return content;
+  }
 
-	private escapeHtml(unsafe: any): string {
-		if (unsafe == null) return "";
+  private processExpression(expression: string, data: Data, shouldEscape: boolean): string {
+    expression = expression.trim();
 
-		return String(unsafe)
-			.replace(/&/g, "&amp;")
-			.replace(/</g, "&lt;")
-			.replace(/>/g, "&gt;")
-			.replace(/"/g, "&quot;")
-			.replace(/'/g, "&#039;")
-			.replace(/`/g, "&#96;")
-			.replace(/=/g, "&#61;")
-			.replace(/\//g, "&#47;");
-	}
+    // 1. Check variable
+    const variableValue = this.resolveVariable(expression, data);
+    if (variableValue !== undefined && variableValue !== null) {
+      return shouldEscape ? this.escapeHtml(variableValue) : variableValue;
+    }
+
+    // 2. Check plugin
+    const pluginResult = this.callPlugin(expression, data);
+    if (pluginResult !== undefined && pluginResult !== null) {
+      return shouldEscape ? this.escapeHtml(pluginResult) : pluginResult;
+    }
+
+    // 3. Evaluates JS expression
+    try {
+      const evaluated = this.evaluateExpression(expression, data);
+      if (evaluated !== undefined && evaluated !== null) {
+        return shouldEscape ? this.escapeHtml(evaluated) : evaluated;
+      }
+    } catch {
+      // If the expression fails, it returns an empty string.
+    }
+
+    return "";
+  }
+
+  private resolveVariable(varName: string, data: Data): any {
+    return varName.split(".").reduce((acc, key) => acc?.[key], data);
+  }
+
+  private evaluateExpression(expression: string, data: Data): any {
+    try {
+      return new Function(...Object.keys(data), `return ${expression};`)(...Object.values(data));
+    } catch {
+      return null;
+    }
+  }
+
+  private callPlugin(expression: string, data: Data): string | null {
+    const match = expression.match(/^(\w+)\((.*?)\)$/);
+    if (!match) return null;
+
+    const [_, pluginName, argsString] = match;
+    const args = argsString.split(",").map((arg) => this.resolveVariable(arg.trim(), data) ?? arg.trim());
+
+    if (this.plugins[pluginName]) {
+      return this.plugins[pluginName](...args);
+    }
+
+    return null;
+  }
+
+  private removeComments(content: string): string {
+    return content.replace(/##.*$/gm, "");
+  }
+
+  private escapeHtml(unsafe: any): string {
+    if (unsafe == null) return "";
+
+    return String(unsafe)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;")
+      .replace(/`/g, "&#96;")
+      .replace(/=/g, "&#61;")
+      .replace(/\//g, "&#47;");
+  }
 }

@@ -3,104 +3,115 @@ import { Application } from "./server";
 import type { CookiesOptions } from "./types/cookies";
 
 class ResponseWrapper {
-	private headersInstance: Headers;
-	private statusCode: number;
-	private body: any;
-	private cookiesInstance: Cookies;
+  private headersInstance: Headers;
+  private statusCode: number;
+  private body: any;
+  private cookiesInstance: Cookies;
+  private currentModule: string | null = null;
 
-	public headers: Headers;
-	public cookies = {
-		set: this.setCookie.bind(this),
-	};
+  public headers: Headers;
+  public cookies = {
+    set: this.setCookie.bind(this),
+  };
 
-	constructor() {
-		this.headersInstance = new Headers();
-		this.statusCode = 200;
-		this.body = null;
-		this.headers = this.getHeadersInstance();
+  constructor() {
+    this.headersInstance = new Headers();
+    this.statusCode = 200;
+    this.body = null;
+    this.headers = this.getHeadersInstance();
 
-		this.cookiesInstance = new Cookies();
-	}
+    this.cookiesInstance = new Cookies();
+  }
 
-	public parse(): Response {
-		this.setCookiesInHeaders();
+  public parse(): Response {
+    this.setCookiesInHeaders();
 
-		return new Response(this.body, {
-			headers: this.headersInstance,
-			status: this.statusCode,
-		});
-	}
+    return new Response(this.body, {
+      headers: this.headersInstance,
+      status: this.statusCode,
+    });
+  }
 
-	private getHeadersInstance(): Headers {
-		return this.headersInstance;
-	}
+  private getHeadersInstance(): Headers {
+    return this.headersInstance;
+  }
 
-	public status(value: number): this {
-		this.statusCode = value;
+  public status(value: number): this {
+    this.statusCode = value;
 
-		return this;
-	}
+    return this;
+  }
 
-	public send(data: any): this {
-		this.body = data;
-		this.headersInstance.set("Content-Lenght", data.length.toString());
+  public send(data: any): this {
+    this.body = data;
+    this.headersInstance.set("Content-Lenght", data.length.toString());
 
-		return this;
-	}
+    return this;
+  }
 
-	public html(data: string): this {
-		this.body = data;
-		this.headersInstance.set("Content-Type", "text/html");
+  public html(data: string): this {
+    this.body = data;
+    this.headersInstance.set("Content-Type", "text/html");
 
-		return this;
-	}
+    return this;
+  }
 
-	public json(data: any): this {
-		this.headersInstance.set("Content-Type", "application/json");
-		this.body = JSON.stringify(data);
-		return this;
-	}
+  public json(data: any): this {
+    this.headersInstance.set("Content-Type", "application/json");
+    this.body = JSON.stringify(data);
+    return this;
+  }
 
-	public redirect(url: string, statusCode = 302): this {
-		this.statusCode = statusCode;
-		this.headersInstance.set("Location", url);
-		this.body = `Redirecting to ${url}`;
-		return this;
-	}
+  public redirect(url: string, statusCode = 302): this {
+    this.statusCode = statusCode;
+    this.headersInstance.set("Location", url);
+    this.body = `Redirecting to ${url}`;
+    return this;
+  }
 
-	public async render(view: string, data: Record<string, any> = {}): Promise<this> {
-		const engine = Application.getInstance().engine.get();
+  public module(moduleName: string): this {
+    this.currentModule = moduleName;
+    return this;
+  }
 
-		if (!engine) {
-			throw new Error("No template engine configured. Use framework().engine.get()");
-		}
+  public async render(view: string, data: Record<string, any> = {}): Promise<this> {
+    const engine = Application.getInstance().engine.get();
 
-		try {
-			const rendered = await engine.render(view, data);
+    if (!engine) {
+      throw new Error("No template engine configured.");
+    }
 
-			this.headersInstance.set("Content-Type", "text/html");
-			this.body = rendered;
-		} catch (error: any) {
-			throw new Error(`Error rendering template: ${error.message}`);
-		}
+    let resolvedView = view;
+    if (this.currentModule && !resolvedView.startsWith("*")) {
+      resolvedView = `*${this.currentModule}*/${resolvedView}`;
+    }
 
-		return this;
-	}
+    try {
+      const rendered = await engine.render(resolvedView, data);
 
-	private setCookie(name: string, value: string, options?: CookiesOptions): this {
-		const cookie = this.cookiesInstance.set(name, value, options);
+      this.headersInstance.set("Content-Type", "text/html");
+      this.body = rendered;
+    } catch (error: any) {
+      throw new Error(`Error rendering template: ${error.message}`);
+    }
 
-		this.headersInstance.append("Set-Cookie", cookie);
-		return this;
-	}
+    return this;
+  }
 
-	private setCookiesInHeaders(): void {
-		const allCookies = this.cookiesInstance.getAll();
+  private setCookie(name: string, value: string, options?: CookiesOptions): this {
+    const cookie = this.cookiesInstance.set(name, value, options);
 
-		for (const [name, value] of Object.entries(allCookies)) {
-			this.headersInstance.append("Set-Cookie", this.cookiesInstance.set(name, value));
-		}
-	}
+    this.headersInstance.append("Set-Cookie", cookie);
+    return this;
+  }
+
+  private setCookiesInHeaders(): void {
+    const allCookies = this.cookiesInstance.getAll();
+
+    for (const [name, value] of Object.entries(allCookies)) {
+      this.headersInstance.append("Set-Cookie", this.cookiesInstance.set(name, value));
+    }
+  }
 }
 
 export type FetchResponse = Response;
