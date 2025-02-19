@@ -1,125 +1,149 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
 import path from "node:path";
 
-type UploadedFile = {
-	fieldName: string;
-	fileName: string;
-	size: number;
-	filePath: string;
-};
-
-type UploadOptions = {
-	allowedTypes?: string[];
-	maxSize?: number;
-	allowedExtensions?: string[];
-};
+import type { NextFunction, Request, Response } from "harpiats";
+import type { CheckReturnObject, FileChecker, UploadConstructor } from "./types/upload";
 
 export class Upload {
-	private fieldName: string;
-	private isMultiple: boolean;
-	private folderPath: string;
-	private options: UploadOptions;
+  private path: string;
+  private fieldName: string;
+  private prefix: string | undefined;
+  private fileName: string | undefined;
+  private options: FileChecker;
 
-	constructor(folderPath?: string, options?: UploadOptions) {
-		this.fieldName = "file";
-		this.isMultiple = false;
-		this.folderPath = folderPath || "uploads";
-		this.options = options || {};
-	}
+  constructor({ path, fieldName, prefix, fileName, options }: UploadConstructor = {}) {
+    this.path = path || "uploads";
+    this.fieldName = fieldName || "file";
+    this.prefix = prefix;
+    this.fileName = fileName;
+    this.options = {
+      maxSize: options?.maxSize ?? 5 * 1024 * 1024, // 5 MB in bytes
+      allowedExtensions: options?.allowedExtensions || [],
+      allowedTypes: options?.allowedTypes || [],
+    };
+  }
 
-	public single(fieldName: string) {
-		this.fieldName = fieldName;
-		this.isMultiple = false;
-		return this.handleUpload.bind(this);
-	}
+  public single = async (req: Request, res: Response, next: NextFunction) => {
+    const formData = await req.formData();
 
-	public array(fieldName: string) {
-		this.fieldName = fieldName;
-		this.isMultiple = true;
-		return this.handleUpload.bind(this);
-	}
+    const file = formData.get(this.fieldName) as File;
+    if (!file) return res.status(404).json({ message: "File Not Found" });
 
-	private async handleUpload(req: Request): Promise<UploadedFile | UploadedFile[]> {
-		if (!req.headers.get("content-type")?.includes("multipart/form-data")) {
-			throw new Error("Invalid content type. Expected multipart/form-data.");
-		}
+    const fileName = this.getFileName(file);
+    const validationResult = this.fileChecker(this.options, file, fileName);
+    if (validationResult) {
+      req.formData = () => Promise.resolve(formData);
+      return res.status(validationResult.status).json({ message: validationResult.message });
+    }
 
-		const formData = await req.formData();
-		const uploadFolder = path.join(process.cwd(), this.folderPath);
-		await fs.mkdir(uploadFolder, { recursive: true });
+    await Bun.write(path.join(process.cwd(), this.path, fileName), file);
 
-		if (this.isMultiple) {
-			return this.handleMultipleUpload(formData, uploadFolder);
-		}
+    req.formData = () => Promise.resolve(formData);
+    next();
+  };
 
-		return this.handleSingleUpload(formData, uploadFolder);
-	}
+  public multiple = async (req: Request, res: Response, next: NextFunction) => {
+    const formData = await req.formData();
 
-	private async handleSingleUpload(formData: FormData, uploadFolder: string): Promise<UploadedFile> {
-		const file = formData.get(this.fieldName);
+    const files = formData.getAll(this.fieldName) as File[];
+    if (!files || files.length === 0) {
+      return res.status(404).json({ message: "Files Not Found" });
+    }
 
-		if (!(file instanceof File)) {
-			throw new Error("No file found in the form data.");
-		}
+    const errors: { fileName: string; message: string }[] = [];
+    const successfullyWrittenFiles: string[] = [];
 
-		this.validateFile(file);
+    for (const file of files) {
+      const fileName = this.getFileName(file);
+      const validationResult = this.fileChecker(this.options, file, fileName);
+      if (validationResult) {
+        errors.push({ fileName: fileName, message: validationResult.message });
+        continue;
+      }
 
-		const fileName = `${Date.now()}-${file.name}`;
-		const filePath = path.join(uploadFolder, fileName);
+      try {
+        const filePath = path.join(process.cwd(), this.path, fileName);
+        await Bun.write(filePath, file);
+        successfullyWrittenFiles.push(filePath);
+      } catch (error: any) {
+        errors.push({
+          fileName: fileName,
+          message: `Failed to write file: ${error.message}`,
+        });
+      }
+    }
 
-		await Bun.write(filePath, file);
+    if (errors.length > 0) {
+      for (const filePath of successfullyWrittenFiles) {
+        try {
+          await fs.promises.unlink(filePath);
+        } catch (error) {
+          console.error(`Failed to delete file ${filePath}:`, error);
+        }
+      }
 
-		return {
-			fieldName: this.fieldName,
-			fileName,
-			size: file.size,
-			filePath,
-		};
-	}
+      return res.status(400).json({
+        message: "Some files failed to process",
+        errors,
+      });
+    }
 
-	private async handleMultipleUpload(formData: FormData, uploadFolder: string): Promise<UploadedFile[]> {
-		const files = formData.getAll(this.fieldName);
-		const uploadedFiles: UploadedFile[] = [];
+    req.formData = () => Promise.resolve(formData);
+    next();
+  };
 
-		for (const file of files) {
-			if (file instanceof File) {
-				this.validateFile(file);
+  private getFileName(file: File): string {
+    const fileName = this.fileName
+      ? `${this.prefix ? `${this.prefix}-` : ""}${this.fileName}${path.extname(file.name)}`
+      : `${this.prefix ? `${this.prefix}-` : ""}${file.name}`;
 
-				const fileName = `${Date.now()}-${file.name}`;
-				const filePath = path.join(uploadFolder, fileName);
+    return fileName;
+  }
 
-				await Bun.write(filePath, file);
+  private fileChecker(options: FileChecker, file: File, fileName: string): CheckReturnObject {
+    const maxSizeCheck = this.checkMaxSize(options, file, fileName);
+    if (maxSizeCheck) return maxSizeCheck;
 
-				uploadedFiles.push({
-					fieldName: this.fieldName,
-					fileName,
-					size: file.size,
-					filePath,
-				});
-			}
-		}
+    const extensionsCheck = this.checkExtensions(options, fileName);
+    if (extensionsCheck) return extensionsCheck;
 
-		if (uploadedFiles.length === 0) {
-			throw new Error("No valid files found in the form data.");
-		}
+    const typesCheck = this.checkTypes(options, file, fileName);
+    if (typesCheck) return typesCheck;
 
-		return uploadedFiles;
-	}
+    return null;
+  }
 
-	private validateFile(file: File): void {
-		if (this.options.allowedTypes && !this.options.allowedTypes.includes(file.type)) {
-			throw new Error(`File type "${file.type}" is not allowed.`);
-		}
+  private checkMaxSize(options: FileChecker, file: File, fileName: string): CheckReturnObject {
+    if (file.size > options.maxSize) {
+      return {
+        status: 400,
+        message: `The file "${fileName}" exceeds the maximum allowed size of ${options.maxSize / 1024 / 1024} MB.`,
+      };
+    }
 
-		if (this.options.maxSize && file.size > this.options.maxSize) {
-			throw new Error(`File size exceeds the maximum allowed size of ${this.options.maxSize} bytes.`);
-		}
+    return null;
+  }
 
-		if (this.options.allowedExtensions) {
-			const fileExtension = path.extname(file.name).toLowerCase();
-			if (!this.options.allowedExtensions.includes(fileExtension)) {
-				throw new Error(`File extension "${fileExtension}" is not allowed.`);
-			}
-		}
-	}
+  private checkExtensions(options: FileChecker, fileName: string): CheckReturnObject {
+    const fileExtension = path.extname(fileName).toLowerCase();
+    if (options.allowedExtensions.length > 0 && !options.allowedExtensions.includes(fileExtension)) {
+      return {
+        status: 400,
+        message: `The file "${fileName}" has a disallowed extension. Allowed extensions: ${options.allowedExtensions.join(", ")}.`,
+      };
+    }
+
+    return null;
+  }
+
+  private checkTypes(options: FileChecker, file: File, fileName: string): CheckReturnObject {
+    if (options.allowedTypes.length > 0 && !options.allowedTypes.includes(file.type)) {
+      return {
+        status: 400,
+        message: `The file "${fileName}" has a disallowed type. Allowed types: ${options.allowedTypes.join(", ")}.`,
+      };
+    }
+
+    return null;
+  }
 }
