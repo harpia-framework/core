@@ -12,6 +12,7 @@ export class TemplateEngine implements Engine {
   private partialsPath: string;
   private useModules: boolean;
   private currentModule: string | null = null;
+  private fileExtension: string;
 
   constructor(options: Options) {
     this.viewsPath = options.path.viewsPath;
@@ -19,6 +20,7 @@ export class TemplateEngine implements Engine {
     this.partialsPath = options.path.partialsPath;
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
+    this.fileExtension = options.fileExtension ?? ".html";
   }
 
   public configure(app: Application): void {
@@ -66,8 +68,8 @@ export class TemplateEngine implements Engine {
   private async resolveViewPath(templateName: string): Promise<string> {
     const baseViewPath = this.viewsPath;
     const filePath = this.defaultViewName
-      ? path.join(baseViewPath, templateName, `${this.defaultViewName}.html`)
-      : path.join(baseViewPath, `${templateName}.html`);
+      ? path.join(baseViewPath, templateName, `${this.defaultViewName}${this.fileExtension}`)
+      : path.join(baseViewPath, `${templateName}${this.fileExtension}`);
 
     const absolutePath = path.resolve(filePath);
 
@@ -102,8 +104,8 @@ export class TemplateEngine implements Engine {
     }
 
     const filePath = this.defaultViewName
-      ? path.join(effectiveViewsPath, viewName, `${this.defaultViewName}.html`)
-      : path.join(effectiveViewsPath, `${viewName}.html`);
+      ? path.join(effectiveViewsPath, viewName, `${this.defaultViewName}${this.fileExtension}`)
+      : path.join(effectiveViewsPath, `${viewName}${this.fileExtension}`);
 
     const absolutePath = path.resolve(filePath);
 
@@ -145,7 +147,7 @@ export class TemplateEngine implements Engine {
   }
 
   private async applyLayout(layoutName: string, blocks: Blocks): Promise<string> {
-    const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}.html`));
+    const layoutContent = await this.readFile(join(this.layoutsPath, `${layoutName}${this.fileExtension}`));
 
     return layoutContent.replace(
       /{{=\s*define\s+block\(["'](.+?)["']\)\s*}}/g,
@@ -161,7 +163,7 @@ export class TemplateEngine implements Engine {
       const partialName = match[1];
       const partialParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-      const partialContent = await this.readFile(join(this.partialsPath, `${partialName}.html`));
+      const partialContent = await this.readFile(join(this.partialsPath, `${partialName}${this.fileExtension}`));
       const renderedPartial = this.interpolateVariables(partialContent, { ...data, ...partialParams });
 
       content = content.replace(match[0], renderedPartial);
@@ -178,7 +180,7 @@ export class TemplateEngine implements Engine {
       const includePath = match[1];
       const includeParams = match[2] ? this.evaluateExpression(match[2], data) : {};
 
-      const fullPath = join(currentDir, `${includePath}.html`);
+      const fullPath = join(currentDir, `${includePath}${this.fileExtension}`);
       const includeContent = await this.readFile(fullPath);
       const renderedInclude = this.interpolateVariables(includeContent, { ...data, ...includeParams });
 
@@ -205,7 +207,7 @@ export class TemplateEngine implements Engine {
 
   private processConditionals(content: string, data: Data): string {
     return content.replace(
-      /{{~\s*if\((.+?)\)\s*}}([\s\S]*?)({{~\s*else\s*}}([\s\S]*?))?{{~\s*endif\s*}}/g,
+      /{{~\s*if\s*\((.+?)\)\s*}}\s*([\s\S]*?)\s*({{~\s*else\s*}}\s*([\s\S]*?)\s*)?{{~\s*endif\s*}}/g,
       (_, condition, ifBlock, elseBlock, elseContent) => {
         return this.evaluateExpression(condition, data) ? ifBlock : elseContent || "";
       },

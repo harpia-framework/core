@@ -4,6 +4,7 @@ export type PluginFunction = (...args: any[]) => string;
 export type Options = {
   viewName?: string;
   useModules?: boolean;
+  fileExtension?: string;
   path: {
     viewsPath: string;
     layoutsPath: string;
