@@ -27,6 +27,7 @@ Table of Contents
   - [Session](#session)
   - [Upload](#upload)
   - [Request Monitor](#request-monitor)
+  - [Security Headers (Shield)](#security-headers-shield)
   - [Test Client](#test-client)
   - [Memory Storage](#memory-storage)
   - [Redis](#redis)
@@ -789,9 +790,6 @@ app.get("/set-cookie", (req, res) => {
 
 In this example, the session cookie is set with options that make it HTTP-only (not accessible via JavaScript) and secure (only sent over HTTPS). The `maxAge` option is also set to define how long the cookie should last (in seconds).
 
-
-
-
 ### Upload
 You can set up a middleware to manage single or multiple file uploads, specifying options like allowed file types, extensions, and maximum file size.
 
@@ -956,6 +954,72 @@ export const Monitor = new RequestMonitor({
   store: new RedisStore(), // Use RedisStore for storing metrics
   ignore: ["favicon.ico"], // Ignore specific routes
 });
+```
+
+### Security Headers (Shield)
+The Shield module is designed to enhance the security of your application by automatically adding HTTP security headers to responses. These headers help protect against common web vulnerabilities such as cross-site scripting (XSS), clickjacking, and content injection.
+
+**Key Features**
+1. Security Headers:
+    - Content Security Policy (CSP): Restricts sources for scripts, styles, and other resources.
+    - Cross-Origin Policies: Controls how resources are shared across origins.
+    - Strict Transport Security (HSTS): Enforces HTTPS connections.
+    - Referrer Policy: Controls the information sent in the Referer header.
+    - X-Content-Type-Options: Prevents MIME type sniffing.
+    - X-Frame-Options: Protects against clickjacking.
+    - X-XSS-Protection: Disables browser XSS filters (if not needed).
+2. Customizable:
+    - Override default headers by passing options to the constructor.
+3. Middleware:
+    - Easily integrate into your application as middleware.
+
+#### Example Usage
+Create a Shield Instance with shield.ts file to initialize and export the middleware:
+```typescript
+import { Shield } from "harpiats/shield";
+
+const instance = new Shield();
+
+export const shield = instance.middleware;
+```
+
+Apply the shield middleware in your server setup:
+```typescript
+import { harpia } from "harpia";
+import { shield } from "./shield";
+
+const app = harpia();
+
+// Apply security headers middleware
+app.use(shield());
+
+// Your routes
+app.get("/", (req, res) => {
+  res.send("Hello, World!");
+});
+
+app.listen({ port: 3000 }, () => console.log("Server running on http://localhost:3000"));
+```
+
+#### Customizing Security Headers
+You can customize the security headers by passing options to the Shield constructor:
+
+```typescript
+const instance = new Shield({
+  contentSecurityPolicy: {
+    directives: {
+      "default-src": ["'self'", "https://trusted.com"],
+      "script-src": ["'self'", "'unsafe-inline'"],
+    },
+  },
+  strictTransportSecurity: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true,
+  },
+});
+
+export const shield = instance.middleware;
 ```
 
 ### Test Client
