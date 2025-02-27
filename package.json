@@ -1,50 +1,50 @@
 {
-	"name": "harpiats",
-	"module": "index.ts",
-	"type": "module",
-	"bin": "./index.ts",
-	"license": "MIT",
-	"version": "0.0.1",
-	"scripts": {
-		"commit": "cz"
-	},
-	"author": {
-		"name": "Lucas Nathan",
-		"url": "https://github.com/lucasnjsilva"
-	},
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/harpia-framework/core"
-	},
-	"homepage": "https://github.com/harpia-framework/core",
-	"description": "Harpia Framework is designed exclusively for the Bun runtime. Like Express, Fastify, or Hono, it can be used independently, offering a lightweight yet powerful foundation for building modern web applications optimized for Bun.",
-	"keywords": ["harpia", "bun", "framework", "web", "api"],
-	"devDependencies": {
-		"@biomejs/biome": "1.9.4",
-		"@commitlint/cli": "^19.6.1",
-		"@commitlint/config-conventional": "^19.6.0",
-		"@types/bun": "latest",
-		"commitizen": "^4.3.1",
-		"cz-conventional-changelog": "^3.3.0"
-	},
-	"peerDependencies": {
-		"typescript": "^5.0.0"
-	},
-	"exports": {
-		".": "./index.ts",
-		"./request": "./src/request.ts",
-		"./response": "./src/response.ts",
-		"./cache": "./src/cache.ts",
-		"./session": "./src/session.ts",
-		"./upload": "./src/upload.ts",
-		"./shield": "./src/shield.ts",
-		"./monitor": "./src/monitor.ts",
-		"./memory-store": "./src/memory-store.ts",
-		"./template-engine": "./src/template-engine.ts"
-	},
-	"config": {
-		"commitizen": {
-			"path": "./node_modules/cz-conventional-changelog"
-		}
-	}
+  "name": "harpiats",
+  "module": "index.ts",
+  "type": "module",
+  "bin": "./index.ts",
+  "license": "MIT",
+  "version": "1.0.0",
+  "scripts": {
+    "commit": "cz"
+  },
+  "author": {
+    "name": "Lucas Nathan",
+    "url": "https://github.com/lucasnjsilva"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/harpia-framework/core"
+  },
+  "homepage": "https://github.com/harpia-framework/core",
+  "description": "Harpia Framework is designed exclusively for the Bun runtime. Like Express, Fastify, or Hono, it can be used independently, offering a lightweight yet powerful foundation for building modern web applications optimized for Bun.",
+  "keywords": ["harpia", "bun", "framework", "web", "api"],
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@types/bun": "latest",
+    "commitizen": "^4.3.1",
+    "cz-conventional-changelog": "^3.3.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "exports": {
+    ".": "./index.ts",
+    "./request": "./src/request.ts",
+    "./response": "./src/response.ts",
+    "./cache": "./src/cache.ts",
+    "./session": "./src/session.ts",
+    "./upload": "./src/upload.ts",
+    "./shield": "./src/shield.ts",
+    "./monitor": "./src/monitor.ts",
+    "./memory-store": "./src/memory-store.ts",
+    "./template-engine": "./src/template-engine.ts"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
 }

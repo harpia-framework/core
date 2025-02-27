@@ -10,6 +10,28 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpia-framework/core/blob/main/LICENSE)
 
 
+Table of Contents
+- [Installation](#installation)
+- [Features](#features)
+- [Examples](#examples)
+  - [Start the Server](#start-the-server)
+  - [Route Management](#route-management)
+  - [Middlewares](#middlewares)
+  - [Web Socket](#web-socket)
+  - [Static Files](#static-files)
+  - [Template Engine](#template-engine)
+  - [Custom "Not Found" Route](#custom-not-found-route)
+  - [CORS](#cors)
+  - [Cookies](#cookies)
+  - [Cache](#cache)
+  - [Session](#session)
+  - [Upload](#upload)
+  - [Request Monitor](#request-monitor)
+  - [Test Client](#test-client)
+  - [Memory Storage](#memory-storage)
+  - [Redis](#redis)
+- [Authors](#authors)
+
 ## Installation
 
 ```bash
@@ -20,14 +42,19 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 - Route management
 - Middleware support
+- Web Socket support
 - Static file support
 - Template engine support
+- Harpia template engine
 - Custom "not found" route
 - Custom cors
 - Cookie handling
 - Cache management
 - Session management
-
+- Upload
+- Request monitor and performance metrics
+- Test client (like Supertest)
+- Memory storage and redis support
 
 ## Examples
 
@@ -37,12 +64,17 @@ import harpia from "harpia";
 
 const app = harpia();
 
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen({
+  port: 3000,
+  development: true,
+  reusePort: true,
+  hostname: "localhost",
+}, () => console.log("Server is running at http://localhost:3000/"));
 ```
 
 ### Route management
 
-Create a route in a different file.
+Creating a route in a different file.
 
 ```typescript
 import { Router } from "harpia";
@@ -54,6 +86,17 @@ books.get("/books", () => console.log("Books route"));
 export default books;
 ```
 
+Creating a route with a prefix
+
+```typescript
+import { Router } from "harpia";
+
+const books = Router("books");
+
+books.get("/", () => console.log("Books route"));
+
+export default books;
+```
 
 Import the route into the main application.
 
@@ -64,7 +107,12 @@ import books from "./books.routes";
 const app = harpia();
 
 app.routes(books);
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen({
+  port: 3000,
+  development: true,
+  reusePort: true,
+  hostname: "localhost",
+}, () => console.log("Server is running at http://localhost:3000/"));
 ```
 
 ### Middlewares
@@ -102,6 +150,50 @@ books.get(
 );
 
 export default books;
+```
+
+### Web Socket
+You can define a route and a custom data for each WebSocket connection and implement handlers for events like connection opening, message reception, connection closing, and errors.
+
+```typescript
+// Define a custom type for WebSocket connection data
+type CustomWebSocketData = {
+  userId: string;
+  username: string;
+  sessionId: string;
+};
+
+// Create a WebSocket route for chat
+app.ws<CustomWebSocketData>("/chat", {
+  // Called when a new WebSocket connection is opened
+  open(ws) {
+    const data = ws.data;
+
+    console.log("New WebSocket connection opened at /chat");
+    data.userId = "123"; // Set custom data
+    data.username = "Alice";
+    data.sessionId = "abc";
+    ws.send(`Welcome to the chat, ${data.username}!`);
+  },
+
+  // Called when a message is received from the client
+  message(ws, message) {
+    const data = ws.data;
+    console.log(`Message received from ${data.username}: ${message}`);
+  },
+
+  // Called when the WebSocket connection is closed
+  close(ws, code, message) {
+    const data = ws.data;
+    console.log(`Connection closed: ${data.username}`);
+  },
+
+  // Called when an error occurs in the WebSocket connection
+  error(ws, error) {
+    const data = ws.data;
+    console.error(`Error in connection for ${data.username}:`, error);
+  },
+});
 ```
 
 ### Static Files
@@ -148,7 +240,7 @@ app.get("/books", async (req, res) => {
   await res.render("home", { title: "Books" })
 });
 
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen...
 ```
 
 Sample EJS Template (e.g., `src/views/home.ejs`):
@@ -166,7 +258,138 @@ Sample EJS Template (e.g., `src/views/home.ejs`):
 </html>
 ```
 
-### Custom "not found" route
+To use the harpia template engine, you can follow these steps:
+
+create a `template-engine.ts` file:
+```typescript
+import path from "node:path";
+import { TemplateEngine } from "harpiats/template-engine";
+
+const baseDir = process.cwd();
+
+export const html = new TemplateEngine({
+  viewName: "page", // page.html will be rendered
+  useModules: false, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  path: {
+    viewsPath: path.join(baseDir, "src", "resources", "pages"),
+    layoutsPath: path.join(baseDir, "src", "resources", "layouts"),
+    partialsPath: path.join(baseDir, "src", "resources", "partials"),
+  },
+});
+```
+
+And set up the application to use the engine:
+
+```typescript
+import harpia from "harpiats";
+import { html } from "app/config/template-engine";
+
+const app = harpia();
+html.configure(app);
+
+app.get("/books", async (req, res) => {
+  await res.render("home", { title: "Books" });
+});
+
+app.listen...
+```
+
+If you would like use a module structure, e.g. `modules/users/pages/home/page.html`, then create a `template-engine.ts` file:
+```typescript
+import path from "node:path";
+import { TemplateEngine } from "harpiats/template-engine";
+
+const baseDir = process.cwd();
+
+export const html = new TemplateEngine({
+  viewName: "page", // page.html will be rendered
+  useModules: true, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
+  path: {
+    viewsPath: path.join(baseDir, "modules", "**", "pages"),
+    layoutsPath: path.join(baseDir, "resources", "layouts"),
+    partialsPath: path.join(baseDir, "resources", "partials"),
+  },
+});
+```
+
+And set up the application to use the engine:
+
+```typescript
+import harpia from "harpiats";
+import { html } from "app/config/template-engine";
+
+const app = harpia();
+html.configure(app);
+
+app.get("/books", async (req, res) => {
+  await res.module("books").render("home", { title: "Books" });
+});
+
+app.listen...
+```
+
+**Harpia Tempate Engine Syntax**
+- Use html files.
+- To use a layout: `{{= layout('default') }}`
+- To use variables: `{{ title }}`.
+- To define a block: `{{= define block("body") }}`.
+- To insert code into a block: `{{= block('body') }} <h1>{{ message  }}</h1> {{= endblock }}`.
+- To include a file `{{= include('welcome', { message: 'Custom message.' }) }}`.
+- To use a partial `{{= partial('card', { name: 'Product A', price: 99.87 }) }}`.
+- To use a comment `## This is a comment`;
+- To define a variable: `{{~ var title = "Homepage" }}`.
+- To use if conditions:
+  ```html
+  {{~ if(isActive) }} <p>User is active.</p> {{~ endif }}
+
+  {{~ if(isActive) }}
+    <p>User is active.</p>
+  {{~ else }}
+    <p>User is not active.</p>
+  {{~ endif }}
+
+  <p>{{ isActive ? 'Active' : 'Inactive' }}</p>
+  ```
+
+  - To use for loops:
+  ```html
+  {{~ for num in numbers }}
+    <p>Number: {{ num }}</p>
+  {{~ endfor }}
+
+  {{~ for [key, value] in products }}
+    <p>Product {{ key }}: {{ value.name }} - $ {{ value.price }}</p>
+  {{~ endfor }}
+  ```
+
+- To register a plugin, in the template-engine.ts file:
+  ```typescript
+    import path from "node:path";
+    import { TemplateEngine } from "harpiats/template-engine";
+
+    const baseDir = process.cwd();
+
+    export const html = new TemplateEngine({
+      viewName: "page",
+      useModules: false,
+      path: {
+        viewsPath: path.join(baseDir, "src", "resources", "pages"),
+        layoutsPath: path.join(baseDir, "src", "resources", "layouts"),
+        partialsPath: path.join(baseDir, "src", "resources", "partials"),
+      },
+    });
+
+    html.registerPlugin("uppercase", (str: string) => str.toUpperCase());
+    html.registerPlugin("sum", (a: number, b: number) => a + b);
+  ```
+
+and in the .html file:
+  ```html
+    <p>Uppercase plugin: {{{ uppercase(user.name) }}}</p>
+    <p>Sum plugin: {{{ sum(10, 20) }}}</p>
+  ```
+
+### Custom not found route
 You can define a custom "Not Found" route to handle requests to undefined paths.
 ```typescript
 const app = harpia();
@@ -207,7 +430,7 @@ app.cors({
   allowedHeaders: ["Content-Type", "Authorization"],  // Allow specific headers
 });
 
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen...
 ```
 
 #### Customizing CORS for Specific Routes
@@ -231,7 +454,7 @@ app.cors({
   methods: "GET",  // Allow only GET method
 }, "/books");  // Apply CORS only to the "/books" route
 
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen...
 ```
 
 #### CORS Options
@@ -302,7 +525,7 @@ app.get("/set-cookie", (req, res) => {
   res.send("Cookie has been set!");
 });
 
-app.listen(3000, () => console.log("Server started at http://localhost:3000/"));
+app.listen...
 ```
 
 #### Getting a Cookie
@@ -567,61 +790,421 @@ app.get("/set-cookie", (req, res) => {
 In this example, the session cookie is set with options that make it HTTP-only (not accessible via JavaScript) and secure (only sent over HTTPS). The `maxAge` option is also set to define how long the cookie should last (in seconds).
 
 
-### Redis Store with ioredis
 
-Harpia supports using Redis as a session store, which allows for scalable and persistent session management. This section demonstrates how to set up and use a Redis-backed session store using the `ioredis` client.
 
-#### RedisStore Class
+### Upload
+You can set up a middleware to manage single or multiple file uploads, specifying options like allowed file types, extensions, and maximum file size.
 
-The `RedisStore` class provides methods to interact with Redis for session management. It allows you to store, retrieve, and delete session data using a Redis database.
+#### Setting Up the Upload Middleware
+
+First, create an instance of the Upload module with your desired configuration:
 
 ```typescript
+import { Upload } from "harpiats/upload";
+
+export const upload = new Upload({
+  fieldName: "file",       // Field name for the file in the request
+  prefix: "profile",       // Prefix for the uploaded file name
+  fileName: Date.now().toString(), // Custom file name (e.g., using a timestamp)
+  path: "tmp",             // Directory to save the uploaded files
+  options: {
+    allowedExtensions: [".jpg"], // Allowed file extensions
+    allowedTypes: ["image/jpeg"], // Allowed MIME types
+    maxSize: 1024 * 1024 * 2, // Maximum file size (2MB in this case)
+  },
+});
+```
+
+#### Using the Upload Middleware in Routes
+Once the Upload instance is configured, you can use it as middleware in your routes to handle file uploads.
+
+**For Single File Uploads:**
+```typescript
+app.post("/user", upload.single, async (req, res) => {
+  // Handle the uploaded file here
+});
+```
+
+**For Multiple File Uploads:**
+```typescript
+app.post("/user", upload.multiple, async (req, res) => {
+  // Handle the uploaded files here
+});
+```
+
+### Request monitor
+The Request Monitor tracks and analyzes request metrics, including visitor data, traffic sources, response times, and errors. It helps monitor application performance and user behavior.
+
+**Setting Up the Request Monitor**
+First, instantiate the RequestMonitor and configure it with a storage mechanism (e.g., MemoryStore). You can also define routes to ignore, such as favicon.ico.
+
+```typescript
+import type { NextFunction, Request, Response } from "harpiats";
+import { MemoryStore } from "harpiats/memory-store";
+import { RequestMonitor } from "harpiats/monitor";
+import { app } from "start/server";
+
+// Initialize the RequestMonitor
+export const Monitor = new RequestMonitor({
+  store: new MemoryStore(), // Use MemoryStore for storing metrics
+  ignore: ["favicon.ico"], // Ignore specific routes
+});
+
+// Middleware to track requests
+export const monitor = (req: Request, res: Response, next: NextFunction) => {
+  if (process.env.ENV === "test") {
+    return next(); // Skip monitoring in test environment
+  }
+
+  // Extract traffic source data from the request
+  const trafficSource = {
+    utm: {
+      id: req.query?.utm_id,
+      source: req.query?.utm_source,
+      medium: req.query?.utm_medium,
+      campaign: req.query?.utm_campaign,
+      sourcePlatform: req.query?.utm_source_platform,
+      term: req.query?.utm_term,
+      content: req.query?.utm_content,
+      creativeFormat: req.query?.utm_creative_format,
+      marketingTactic: req.query?.utm_marketing_tactic,
+    },
+    referer: req.headers.get("referer") || undefined, // Referer header
+    userAgent: req.headers.get("User-Agent") || undefined, // User-Agent header
+  };
+
+  // Initialize monitoring for the request
+  Monitor.initialize(req, app.requestIP() as string, trafficSource);
+  Monitor.handleRequest();
+
+  next(); // Proceed to the next middleware or route handler
+};
+```
+
+**Using the Request Monitor**
+Add the monitor middleware to your application. You can access metrics via a dedicated route, such as /metrics.
+
+```typescript
+const app = harpia();
+
+// Add the monitor middleware
+app.use(monitor);
+
+// Route to fetch metrics
+app.get("/metrics", async (req, res) => {
+  const metrics = await Monitor.getMetrics();
+  console.log(metrics);
+  res.json(metrics); // Return metrics as JSON
+});
+```
+
+**Using Redis as a Store**
+Create a redis.ts file:
+```typescript
+import type { Store } from "harpiats";
 import Redis from "ioredis";
-import type { Store } from "harpia";
 
 export class RedisStore implements Store {
   private client: Redis;
-  private prefix: string;
 
-  constructor(client: Redis, prefix: string = "session_") {
-    this.client = client;
-    this.prefix = prefix;
+  constructor(db?: number) {
+    this.client = new Redis({
+      host: process.env.REDIS_HOST || "localhost",
+      username: process.env.REDIS_USER || "",
+      password: process.env.REDIS_PASS || "",
+      port: Number(process.env.REDIS_PORT) || 6379,
+      db: db || 0,
+      lazyConnect: true,
+    });
+
+    this.client.on("connect", () => console.log("Connected to Redis"));
+    this.client.on("error", (err) => console.error("Redis error:", err));
+    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
   }
 
-  private getKey(sessionId: string): string {
-    return `${this.prefix}${sessionId}`;
+  async on(): Promise<boolean> {
+    if (this.client.on("connect", () => true)) {
+      return true;
+    }
+
+    return false;
   }
 
-  async get(sessionId: string): Promise<Record<string, any> | undefined> {
-    const data = await this.client.get(this.getKey(sessionId));
+  async get(key: string): Promise<Record<string, any> | undefined> {
+    const data = await this.client.get(key);
+
     return data ? JSON.parse(data) : undefined;
   }
 
-  async set(sessionId: string, data: Record<string, any>): Promise<void> {
-    await this.client.set(this.getKey(sessionId), JSON.stringify(data));
+  async set(key: string, data: any): Promise<void> {
+    await this.client.set(key, JSON.stringify(data));
   }
 
-  async delete(sessionId: string): Promise<void> {
-    await this.client.del(this.getKey(sessionId));
+  async delete(key: string): Promise<void> {
+    await this.client.del(key);
+  }
+}
+
+```
+
+And use it like this:
+
+```typescript
+import { RedisStore } from "./redis";
+
+export const Monitor = new RequestMonitor({
+  store: new RedisStore(), // Use RedisStore for storing metrics
+  ignore: ["favicon.ico"], // Ignore specific routes
+});
+```
+
+### Test Client
+The **Test Client** is a powerful tool for testing your application's routes. It supports all HTTP methods (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, `HEAD`), query parameters, headers, JSON payloads, form data, and file uploads. Below is a detailed explanation of its features and usage.
+
+#### Key Features
+
+1. **HTTP Methods**:
+   - `.get(url)` - Simulate a `GET` request.
+   - `.post(url)` - Simulate a `POST` request.
+   - `.put(url)` - Simulate a `PUT` request.
+   - `.delete(url)` - Simulate a `DELETE` request.
+   - `.patch(url)` - Simulate a `PATCH` request.
+   - `.options(url)` - Simulate an `OPTIONS` request.
+   - `.head(url)` - Simulate a `HEAD` request.
+
+2. **Query Parameters**:
+   - `.query(name, value)` - Add query parameters to the request.
+
+3. **Headers**:
+   - `.set(name, value)` - Set custom headers for the request.
+
+4. **Request Body**:
+   - `.send(data)` - Send raw data in the request body.
+   - `.json(data)` - Send JSON data in the request body.
+   - `.formData(data)` - Send form data in the request body.
+
+5. **File Uploads**:
+   - `.file(files)` - Upload a single file or multiple files.
+   - `.files(files)` - Upload multiple files for a single field.
+
+6. **Execution**:
+   - `.execute()` - Execute the request and return the response.
+
+#### Example Usage
+
+#### Testing a GET Request with Query Parameters
+
+```typescript
+import { expect, test } from "bun:test";
+import { TestClient } from "harpiats";
+import { app } from "start/server";
+
+test("GET /hello returns status 401", async () => {
+  const request = new TestClient(app)
+    .get("/hello")
+    .query("number", "123456"); // Add query parameter
+
+  const response = await request.execute();
+
+  // Validate the response
+  expect(response.status).toBe(401);
+  expect(await response.json()).toEqual({ message: "Unauthorized" });
+});
+```
+
+#### Testing a POST Request with JSON Payload
+
+```typescript
+test("POST /user returns status 201", async () => {
+  const request = new TestClient(app)
+    .post("/user")
+    .json({ name: "John", age: 30 }); // Send JSON data
+
+  const response = await request.execute();
+
+  // Validate the response
+  expect(response.status).toBe(201);
+  expect(await response.json()).toEqual({ id: 1, name: "John", age: 30 });
+});
+```
+
+#### Testing a POST Request with File Upload
+
+```typescript
+import path from "node:path";
+
+test("POST /upload handles file upload", async () => {
+  const filePath = path.resolve(__dirname, "./uploads/image.jpg");
+
+  const request = new TestClient(app)
+    .post("/upload")
+    .file({ file: filePath }) // Upload a single file
+    .formData({ username: "example" }); // Add form data
+
+  const response = await request.execute();
+  console.log(await response.json()); // Log the response
+});
+```
+
+#### Testing a POST Request with Multiple Files
+
+```typescript
+test("POST /upload handles multiple files", async () => {
+  const filePath1 = path.resolve(__dirname, "./uploads/image1.jpg");
+  const filePath2 = path.resolve(__dirname, "./uploads/image2.jpg");
+
+  const request = new TestClient(app)
+    .post("/upload")
+    .files({ files: [filePath1, filePath2] }); // Upload multiple files
+
+  const response = await request.execute();
+  console.log(await response.json()); // Log the response
+});
+```
+
+---
+
+#### Advanced Usage
+
+#### Setting Custom Headers
+
+```typescript
+test("GET /protected requires authorization", async () => {
+  const request = new TestClient(app)
+    .get("/protected")
+    .set("Authorization", "Bearer token123"); // Set custom header
+
+  const response = await request.execute();
+  expect(response.status).toBe(200);
+});
+```
+
+#### Sending Raw Data
+
+```typescript
+test("POST /raw sends raw data", async () => {
+  const request = new TestClient(app)
+    .post("/raw")
+    .send("raw data"); // Send raw data
+
+  const response = await request.execute();
+  expect(response.status).toBe(200);
+});
+```
+
+#### Response Handling
+
+The `.execute()` method returns includes:
+
+- **Status Code**: `response.status`
+- **Headers**: `response.headers`
+- **Body**: `response.json()`, `response.text()`, or `response.blob()`
+
+#### Error Handling
+
+- If you try to mix incompatible body types (e.g., `.json()` after `.formData()`), an error will be thrown.
+- If a file path does not exist, an error will be thrown.
+
+### Memory Storage
+The Memory Storage module provides an in-memory key-value store for managing session data or other temporary storage needs. It implements the Store interface, offering methods to get, set, and delete data.
+
+**Storing and Retrieving Data**
+```typescript
+const memoryStore = new MemoryStore();
+
+// Store session data
+await memoryStore.set("session123", { userId: 1, username: "Alice" });
+
+// Retrieve session data
+const sessionData = await memoryStore.get("session123");
+console.log(sessionData); // { userId: 1, username: "Alice" }
+
+// Delete session data
+await memoryStore.delete("session123");
+console.log(await memoryStore.get("session123")); // undefined
+```
+
+**Using with Session Management**
+```typescript
+import { MemoryStore } from "harpiats/memory-store";
+import { SessionManager } from "harpiats/session";
+
+const memoryStore = new MemoryStore();
+const sessionManager = new SessionManager({ store: memoryStore });
+
+// Create a new session
+const sessionId = await sessionManager.createSession({ userId: 1, username: "Alice" });
+
+// Retrieve session data
+const session = await sessionManager.getSession(sessionId);
+console.log(session); // { userId: 1, username: "Alice" }
+
+// Delete the session
+await sessionManager.deleteSession(sessionId);
+```
+
+### Redis
+
+The Redis Storage provides a persistent key-value store using Redis. It implements the Store interface, offering methods to get, set, and delete data. Redis is ideal for distributed systems, caching, and persistent session storage.
+
+**Implementation**
+```typescript
+import type { Store } from "harpiats";
+import Redis from "ioredis";
+
+export class RedisStore implements Store {
+  private client: Redis;
+
+  constructor(db?: number) {
+    this.client = new Redis({
+      host: process.env.REDIS_HOST || "localhost",
+      username: process.env.REDIS_USER || "",
+      password: process.env.REDIS_PASS || "",
+      port: Number(process.env.REDIS_PORT) || 6379,
+      db: db || 0,
+      lazyConnect: true,
+    });
+
+    this.client.on("connect", () => console.log("Connected to Redis"));
+    this.client.on("error", (err) => console.error("Redis error:", err));
+    this.client.connect().catch((err) => console.error("Failed to connect to Redis:", err));
+  }
+
+  async on(): Promise<boolean> {
+    if (this.client.on("connect", () => true)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  async get(key: string): Promise<Record<string, any> | undefined> {
+    const data = await this.client.get(key);
+
+    return data ? JSON.parse(data) : undefined;
+  }
+
+  async set(key: string, data: any): Promise<void> {
+    await this.client.set(key, JSON.stringify(data));
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.client.del(key);
   }
 }
 ```
 
-In this example, the `RedisStore` class uses `ioredis` to interact with Redis. The session data is stored as a JSON string, and keys are prefixed with `session_` to avoid key collisions.
-
-#### Example Usage with Harpia
+#### Example Usage
 
 Once you've set up the `RedisStore`, you can use it in your routes to manage sessions. Below is an example of how to use Redis to manage user sessions in a Harpia app:
 
 ```typescript
-import Redis from "ioredis";
 import { Router } from "harpia";
 import { Session } from "harpia/session";
-import { RedisStore } from "./redis-store";
+import { RedisStore } from "redis.ts";
 
 // Redis Setup
-const redisClient = new Redis();
-const redisStore = new RedisStore(redisClient, "my_sessions_");
+const redisStore = new RedisStore();
 const useSession = new Session({ store: redisStore, cookieName: "my_session_id" });
 
 // Routes Setup
@@ -671,156 +1254,7 @@ export { session };
 - **Profile Route (`/profile`)**: The user's session data is fetched from Redis using the session ID stored in the client's cookie. If the session is valid, the user's profile data is returned.
 - **Logout Route (`/logout`)**: When the user logs out, the session is deleted from Redis, and the session cookie is cleared from the client.
 
-#### Redis Configuration
-
-Ensure that the Redis client is properly configured to connect to your Redis instance. You can pass options to the `Redis` constructor for specific configurations such as host, port, or authentication credentials.
-
-```typescript
-const redisClient = new Redis({
-  host: "localhost",
-  port: 6379,
-  password: "your_redis_password", // if authentication is required
-});
-```
-
----
-
 This integration provides a persistent session management system backed by Redis, allowing you to scale your application efficiently. The session data is stored securely and can be accessed across different instances of your application.
-
-### Redis Store with connect-redis
-
-Here we use `connect-redis`, which integrates seamlessly with Redis for session storage and management. Below is the required code to set up `connect-redis` with the `redis` client to store sessions persistently.
-
-#### RedisStore Class with connect-redis
-
-The `RedisStore` class uses `connect-redis` to manage sessions. It stores and manages sessions in a way similar to `RedisStore` with `ioredis`, but now uses the `connect-redis` API.
-
-```typescript
-import { createClient } from "redis";
-import { RedisStore as ConnectRedisStore } from "connect-redis";
-import type { Store } from "harpia/session";
-
-export class RedisStore implements Store {
-  private store: ConnectRedisStore;
-
-  constructor(options: { prefix?: string; client?: ReturnType<typeof createClient> }) {
-    const redisClient = options.client || createClient();
-    redisClient.connect().catch(console.error);
-    this.store = new ConnectRedisStore({
-      client: redisClient,
-      prefix: options.prefix || "session_",
-    });
-  }
-
-  async get(sessionId: string): Promise<Record<string, any> | undefined> {
-    return new Promise((resolve, reject) => {
-      this.store.get(sessionId, (err, session) => {
-        if (err) return reject(err);
-        resolve(session || undefined);
-      });
-    });
-  }
-
-  async set(sessionId: string, data: Record<string, any>): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.store.set(sessionId, data, (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
-  }
-
-  async delete(sessionId: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.store.destroy(sessionId, (err) => {
-        if (err) return reject(err);
-        resolve();
-      });
-    });
-  }
-}
-```
-
-The `RedisStore` class uses `createClient` from `redis` to connect to Redis and utilizes `connect-redis` to store and manage session data. Sessions are stored in Redis with a prefix, which defaults to `session_`.
-
-#### Example Usage with Harpia
-
-Here’s how you can integrate `RedisStore` with session management in your Harpia application, using cookies to maintain the session state across requests.
-
-```typescript
-import { Router } from "harpia";
-import { Session } from "harpia/session";
-import { RedisStore } from "./redis/connect-redis";
-import { createClient } from "redis";
-
-// Redis Setup
-const redisClient = createClient();
-const redisStore = new RedisStore({ client: redisClient, prefix: "session_" });
-const useSession = new Session({ store: redisStore, cookieName: "my_session_id" });
-
-// Routes Setup
-const routes = Router();
-
-routes.post("/login", async (req, res) => {
-  const sessionExists = await useSession.fromRequest(req);
-  if (sessionExists) {
-    res.json({ message: "Session already exists" });
-  } else {
-    const sessionData = { userId: "12345", username: "pyro" };
-    const sessionId = await useSession.create(sessionData);
-  
-    useSession.setCookie(res, sessionId, { maxAge: 3600, httpOnly: true, secure: true });
-    res.cookies.set("theme", "dark"); 
-    res.json({ message: "Login successful!" });
-  }
-});
-
-routes.get("/profile", async (req, res) => {
-  const sessionData = await useSession.fromRequest(req);  
-
-  if (sessionData) {
-    res.json({ profile: sessionData });
-  } else {
-    res.status(401).json({ message: "Session expired or not found!" });
-  }
-});
-
-routes.post("/logout", async (req, res) => {
-  const sessionId = req.cookies.get("my_session_id");
-
-  if (sessionId) {
-    await useSession.delete(sessionId, res);
-    res.json({ message: "Logout successful!" });
-  } else {
-    res.status(400).json({ message: "Session not found!" });
-  }
-});
-
-export { routes };
-```
-
-#### How it Works:
-
-1. **Login (`/login`)**: When the user logs in, a new session is created in Redis. The session ID is stored as a cookie in the client, and session data is stored in Redis. If a session already exists, the user is notified.
-2. **Profile (`/profile`)**: The user's session is checked by looking at the session ID stored in the cookies. If the session is valid, the profile data is returned.
-3. **Logout (`/logout`)**: When the user logs out, the session is removed from Redis, and the session cookie is deleted.
-
-#### Redis Configuration
-
-Make sure Redis is properly configured for your environment. If necessary, you can configure additional options for the `redis` client:
-
-```typescript
-const redisClient = createClient({
-  host: "localhost",
-  port: 6379,
-  password: "your_redis_password", // if needed
-});
-```
-
----
-
-This setup provides a robust and scalable way to manage sessions in Redis, leveraging `connect-redis` and the `redis` client. It ensures your application is efficient in terms of storage and easily scalable.
-
 
 ## Authors
 
