@@ -14,6 +14,7 @@ import type { Handler, HandlerResult } from "./types/handler";
 import type { NotFoundTypes } from "./types/not-found";
 import type { MethodOptions } from "./types/router";
 import type { ServerOptions } from "./types/server";
+import { WebSocket, type WebSocketHandlers } from "./websocket";
 
 export class Application {
   private static instance: Application | null = null;
@@ -26,6 +27,7 @@ export class Application {
   private notFound: NotFoundTypes = null;
   private staticPath: string | null = null;
   private templateEngine: Engine | null = null;
+  private websocket: WebSocket;
 
   public engine = {
     set: (engine: Engine) => this.setTemplateEngine(engine),
@@ -36,6 +38,7 @@ export class Application {
     this.router = new Router();
     this.middlewares = new Middleware();
     this.corsInstance = new Cors();
+    this.websocket = new WebSocket();
   }
 
   public static getInstance(): Application {
@@ -72,16 +75,7 @@ export class Application {
     const commonConfig = {
       development: options.development,
       maxRequestBodySize: options.maxRequestBodySize,
-      websocket: options.ws
-        ? {
-            message: () => {},
-            open: () => {},
-            close: () => {},
-            drain: () => {},
-            error: () => {},
-            ...options.ws,
-          }
-        : undefined,
+      websocket: this.websocket.all(),
       fetch: this.handleRequest.bind(this),
     };
 
@@ -103,6 +97,10 @@ export class Application {
     if (handler) {
       handler();
     }
+  }
+
+  public ws<DataType = any>(path: string, handlers: WebSocketHandlers<DataType>): void {
+    this.websocket.register(path, handlers as WebSocketHandlers<unknown>);
   }
 
   public stop(): void {

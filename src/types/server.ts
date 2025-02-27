@@ -21,8 +21,9 @@ export type TLSOptions = {
   lowMemoryMode?: boolean;
 };
 
-type WebSocketData = {
+export type WebSocketData = {
   url: string;
+  data: Record<string, any>;
 };
 
 export type WebSocketOptions<DataType = unknown> = {
