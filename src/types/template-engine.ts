@@ -6,8 +6,8 @@ export type Options = {
   useModules?: boolean;
   fileExtension?: string;
   path: {
-    viewsPath: string;
-    layoutsPath: string;
-    partialsPath: string;
+    views: string;
+    layouts: string;
+    partials: string;
   };
 };

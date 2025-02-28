@@ -15,9 +15,9 @@ export class TemplateEngine implements Engine {
   private fileExtension: string;
 
   constructor(options: Options) {
-    this.viewsPath = options.path.viewsPath;
-    this.layoutsPath = options.path.layoutsPath;
-    this.partialsPath = options.path.partialsPath;
+    this.viewsPath = options.path.views;
+    this.layoutsPath = options.path.layouts;
+    this.partialsPath = options.path.partials;
     this.defaultViewName = options.viewName;
     this.useModules = options.useModules ?? false;
     this.fileExtension = options.fileExtension ?? ".html";
@@ -290,7 +290,24 @@ export class TemplateEngine implements Engine {
     if (!match) return null;
 
     const [_, pluginName, argsString] = match;
-    const args = argsString.split(",").map((arg) => this.resolveVariable(arg.trim(), data) ?? arg.trim());
+
+    // Process arguments recursively
+    const args = argsString.split(",").map((arg) => {
+      arg = arg.trim();
+
+      // Check if the argument is another plugin call (e.g., "singularize(name)")
+      if (arg.match(/^\w+\(.*\)$/)) {
+        return this.callPlugin(arg, data); // Recursively process nested plugin calls
+      }
+
+      // Check if the argument is a variable (e.g., "name")
+      const variableValue = this.resolveVariable(arg, data);
+      if (variableValue !== undefined && variableValue !== null) {
+        return variableValue;
+      }
+
+      return arg;
+    });
 
     if (this.plugins[pluginName]) {
       return this.plugins[pluginName](...args);
