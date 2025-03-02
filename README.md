@@ -20,6 +20,7 @@ Table of Contents
   - [Web Socket](#web-socket)
   - [Static Files](#static-files)
   - [Template Engine](#template-engine)
+  - [Method Override](#method-override)
   - [Custom "Not Found" Route](#custom-not-found-route)
   - [CORS](#cors)
   - [Cookies](#cookies)
@@ -389,6 +390,18 @@ and in the .html file:
     <p>Uppercase plugin: {{{ uppercase(user.name) }}}</p>
     <p>Sum plugin: {{{ sum(10, 20) }}}</p>
   ```
+### Method Override
+The Method Override technique is commonly used to simulate HTTP methods like `PUT`, `DELETE`, and `PATCH` in web applications where the client (e.g., browsers) may not natively support these methods. This is particularly useful when working with HTML forms, which only support `GET` and `POST` methods.
+
+The idea is to include a hidden input field (e.g., `_method`) within a `POST` form to indicate the desired HTTP method. The form must use the `enctype="application/x-www-form-urlencoded"` attribute to ensure the data is properly encoded. When the form is submitted, the server reads the `_method` value and overrides the actual `POST` method with the specified one.
+
+#### Example
+```html
+<form action="/account" method="POST" enctype="application/x-www-form-urlencoded">
+  <input type="hidden" name="_method" value="DELETE">
+  <button type="submit">Delete</button>
+</form>
+```
 
 ### Custom not found route
 You can define a custom "Not Found" route to handle requests to undefined paths.
