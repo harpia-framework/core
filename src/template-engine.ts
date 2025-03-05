@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import fs, { readFile } from "node:fs/promises";
 import path, { join } from "node:path";
 import type { Application } from "./server";
 import type { Engine } from "./types/engine";
@@ -33,7 +33,12 @@ export class TemplateEngine implements Engine {
   }
 
   public async render(templateName: string, data: Data = {}): Promise<string> {
-    const viewFilePath = await this.viewFilePathResolver(templateName);
+    let resolvedView = templateName;
+    if (this.currentModule && !resolvedView.startsWith("*")) {
+      resolvedView = `*${this.currentModule}*/${resolvedView}`;
+    }
+
+    const viewFilePath = await this.viewFilePathResolver(resolvedView);
     const viewContent = await this.readFile(viewFilePath);
     const layoutName = this.extractLayout(viewContent);
     const { blocks, content: remainingView } = this.extractBlocks(viewContent);
@@ -51,6 +56,39 @@ export class TemplateEngine implements Engine {
     finalContent = this.removeComments(finalContent);
 
     return finalContent;
+  }
+
+  public async renderTemplate(viewPath: string, data: Data = {}): Promise<string> {
+    try {
+      const viewFilePath = path.join(process.cwd(), `${viewPath}${this.fileExtension}`);
+      const absolutePath = path.resolve(viewFilePath);
+
+      try {
+        await fs.access(absolutePath);
+      } catch {
+        throw new Error(`No files found: ${absolutePath}`);
+      }
+
+      const viewContent = await readFile(absolutePath, "utf-8");
+      const layoutName = this.extractLayout(viewContent);
+      const { blocks, content: remainingView } = this.extractBlocks(viewContent);
+
+      if (remainingView.trim() && !blocks.body) {
+        blocks.body = remainingView;
+      }
+
+      let finalContent = layoutName ? await this.applyLayout(layoutName, blocks) : remainingView;
+
+      finalContent = await this.processPartials(finalContent, data);
+      finalContent = await this.processInclude(finalContent, path.dirname(absolutePath), data);
+      finalContent = this.processOperations(finalContent, data);
+      finalContent = this.interpolateVariables(finalContent, data);
+      finalContent = this.removeComments(finalContent);
+
+      return finalContent;
+    } catch (error) {
+      throw new Error("Error rendering template.");
+    }
   }
 
   public registerPlugin(name: string, fn: PluginFunction): void {
