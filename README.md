@@ -273,9 +273,9 @@ export const html = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: false, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
   path: {
-    viewsPath: path.join(baseDir, "src", "resources", "pages"),
-    layoutsPath: path.join(baseDir, "src", "resources", "layouts"),
-    partialsPath: path.join(baseDir, "src", "resources", "partials"),
+    views: path.join(baseDir, "src", "resources", "pages"),
+    layouts: path.join(baseDir, "src", "resources", "layouts"),
+    partials: path.join(baseDir, "src", "resources", "partials"),
   },
 });
 ```
@@ -307,9 +307,9 @@ export const html = new TemplateEngine({
   viewName: "page", // page.html will be rendered
   useModules: true, // true if uses a module structure (e.g. modules/users/pages/home/page.html)
   path: {
-    viewsPath: path.join(baseDir, "modules", "**", "pages"),
-    layoutsPath: path.join(baseDir, "resources", "layouts"),
-    partialsPath: path.join(baseDir, "resources", "partials"),
+    views: path.join(baseDir, "modules", "**", "pages"),
+    layouts: path.join(baseDir, "resources", "layouts"),
+    partials: path.join(baseDir, "resources", "partials"),
   },
 });
 ```
@@ -375,9 +375,9 @@ app.listen...
       viewName: "page",
       useModules: false,
       path: {
-        viewsPath: path.join(baseDir, "src", "resources", "pages"),
-        layoutsPath: path.join(baseDir, "src", "resources", "layouts"),
-        partialsPath: path.join(baseDir, "src", "resources", "partials"),
+        views: path.join(baseDir, "src", "resources", "pages"),
+        layouts: path.join(baseDir, "src", "resources", "layouts"),
+        partials: path.join(baseDir, "src", "resources", "partials"),
       },
     });
 
