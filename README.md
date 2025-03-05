@@ -330,6 +330,24 @@ app.get("/books", async (req, res) => {
 app.listen...
 ```
 
+It is also possible to render a template from its path, regardless of where it is in the application. To do this, we can follow the example:
+```typescript
+import harpia from "harpiats";
+import { html } from "app/config/template-engine";
+
+const app = harpia();
+html.configure(app);
+
+app.post("/send-email", async (req, res) => {
+  const data = {}
+  const content = await html.renderTemplate("app/services/mailer/templates/account-created", { data });
+
+  console.log(content);
+});
+
+app.listen...
+```
+
 **Harpia Tempate Engine Syntax**
 - Use html files.
 - To use a layout: `{{= layout('default') }}`
