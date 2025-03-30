@@ -1,17 +1,28 @@
 import type { Store } from "./types/store";
 
 export class MemoryStore implements Store {
-	private sessions = new Map<string, Record<string, any>>();
+  private store: Map<string, any>;
+  private lock: Promise<void>;
 
-	async get(sessionId: string): Promise<Record<string, any> | undefined> {
-		return this.sessions.get(sessionId);
-	}
+  constructor() {
+    this.store = new Map();
+    this.lock = Promise.resolve();
+  }
 
-	async set(sessionId: string, data: Record<string, any>): Promise<void> {
-		this.sessions.set(sessionId, data);
-	}
+  public async get(key: string): Promise<any> {
+    await this.lock;
+    return this.store.get(key);
+  }
 
-	async delete(sessionId: string): Promise<void> {
-		this.sessions.delete(sessionId);
-	}
+  public async set(key: string, value: any): Promise<void> {
+    this.lock = this.lock.then(() => {
+      this.store.set(key, value);
+    });
+    await this.lock;
+  }
+
+  async delete(sessionId: string): Promise<void> {
+    await this.lock;
+    this.store.delete(sessionId);
+  }
 }

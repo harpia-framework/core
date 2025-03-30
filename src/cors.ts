@@ -3,207 +3,220 @@ import type { CorsOptions } from "./types/cors";
 import type { MethodOptions } from "./types/router";
 
 export class Cors {
-	public options: CorsOptions | null;
+  public options: CorsOptions | null;
 
-	constructor() {
-		this.options = null;
-	}
+  constructor() {
+    this.options = null;
+  }
 
-	public setCors(req: Request, res: Response, next: () => void): boolean {
-		return this.handleCors(req, res, next);
-	}
+  public setCors(req: Request, res: Response, next: () => void): boolean {
+    return this.handleCors(req, res, next);
+  }
 
-	private handleCors(req: Request, res: Response, next: () => void): boolean {
-		const reqOrigin = req.headers.get("Origin");
+  private handleCors(req: Request, res: Response, next: () => void): boolean {
+    const reqOrigin = req.headers.get("Origin");
 
-		if (this.options) {
-			const {
-				origin,
-				methods,
-				allowedHeaders,
-				exposedHeaders,
-				credentials,
-				maxAge,
-				preflightContinue,
-				optionsSuccessStatus,
-			} = this.options;
+    if (this.options) {
+      const {
+        origin,
+        methods,
+        allowedHeaders,
+        exposedHeaders,
+        credentials,
+        maxAge,
+        preflightContinue,
+        optionsSuccessStatus,
+      } = this.options;
 
-			if (!this.isOriginAllowed(origin, reqOrigin, res)) return false;
-			if (!this.isMethodAllowed(methods, req.method, res)) return false;
+      if (!this.isOriginAllowed(origin, reqOrigin, res)) return false;
+      if (!this.isMethodAllowed(methods, req.method, res)) return false;
 
-			this.allowHeaders(allowedHeaders, res);
-			this.exposeHeaders(exposedHeaders, res);
-			this.addCredentials(credentials, res);
-			this.addMaxAge(maxAge, res);
+      this.allowHeaders(allowedHeaders, res);
+      this.exposeHeaders(exposedHeaders, res);
+      this.addCredentials(credentials, res);
+      this.addMaxAge(maxAge, res);
 
-			if (req.method === "OPTIONS") {
-				const isPreflightAllowed = this.handlePreflight(preflightContinue, optionsSuccessStatus, res);
+      if (req.method === "OPTIONS") {
+        const isPreflightAllowed = this.handlePreflight(preflightContinue, optionsSuccessStatus, res);
 
-				if (isPreflightAllowed) {
-					next();
-				}
-			}
-		}
+        if (!isPreflightAllowed) {
+          return false;
+        }
 
-		return true;
-	}
+        next();
+        return true;
+      }
+    }
 
-	private isOriginAllowed(origin: CorsOptions["origin"], reqOrigin: string | null, res: Response): boolean {
-		if (origin) {
-			return this.handleOrigin(reqOrigin, res);
-		}
+    return true;
+  }
 
-		return true;
-	}
+  private isOriginAllowed(origin: CorsOptions["origin"], reqOrigin: string | null, res: Response): boolean {
+    if (origin === false) {
+      res.status(403).send("Origin Not Allowed");
+      return false;
+    }
 
-	private handleOrigin(reqOrigin: string | null, res: Response): boolean {
-		if (this.options) {
-			if (!this.options.origin) {
-				return true;
-			}
+    if (origin) {
+      return this.handleOrigin(reqOrigin, res);
+    }
 
-			if (typeof this.options.origin === "boolean") {
-				if (this.options.origin === true) {
-					res.headers.set("Access-Control-Allow-Origin", "*");
-					return true;
-				}
+    return true;
+  }
 
-				if (!reqOrigin) {
-					res.status(403).send("Origin Not Allowed");
-					return false;
-				}
-			}
+  private handleOrigin(reqOrigin: string | null, res: Response): boolean {
+    if (this.options) {
+      if (!this.options.origin) {
+        return true;
+      }
 
-			if (typeof this.options.origin === "string") {
-				const isAllowed = this.options.origin === reqOrigin;
+      if (typeof this.options.origin === "boolean") {
+        if (this.options.origin === true) {
+          res.headers.set("Access-Control-Allow-Origin", "*");
+          return true;
+        }
 
-				if (isAllowed) {
-					res.headers.set("Access-Control-Allow-Origin", this.options.origin);
-				} else {
-					res.status(403).send("Origin Not Allowed");
-				}
+        if (this.options.origin === false) {
+          res.status(403).send("Origin Not Allowed");
+          return false;
+        }
 
-				return isAllowed;
-			}
+        if (!reqOrigin) {
+          res.status(403).send("Origin Not Allowed");
+          return false;
+        }
+      }
 
-			if (this.options.origin instanceof RegExp) {
-				if (reqOrigin) {
-					const isAllowed = (this.options.origin as RegExp).test(reqOrigin);
+      if (typeof this.options.origin === "string") {
+        const isAllowed = this.options.origin === reqOrigin;
 
-					if (isAllowed) {
-						res.headers.set("Access-Control-Allow-Origin", reqOrigin);
-					} else {
-						res.status(403).send("Origin Not Allowed");
-					}
+        if (isAllowed) {
+          res.headers.set("Access-Control-Allow-Origin", this.options.origin);
+        } else {
+          res.status(403).send("Origin Not Allowed");
+        }
 
-					return isAllowed;
-				}
+        return isAllowed;
+      }
 
-				return false;
-			}
+      if (this.options.origin instanceof RegExp) {
+        if (reqOrigin) {
+          const isAllowed = (this.options.origin as RegExp).test(reqOrigin);
 
-			if (Array.isArray(this.options.origin)) {
-				if (reqOrigin) {
-					const isAllowed = (this.options.origin as Array<string | RegExp>).some((item) => {
-						const isString = typeof item === "string" && item === reqOrigin;
-						const isRegex = item instanceof RegExp && item.test(reqOrigin);
+          if (isAllowed) {
+            res.headers.set("Access-Control-Allow-Origin", reqOrigin);
+          } else {
+            res.status(403).send("Origin Not Allowed");
+          }
 
-						return isString || isRegex;
-					});
+          return isAllowed;
+        }
 
-					if (isAllowed) {
-						res.headers.set("Access-Control-Allow-Origin", reqOrigin);
-					} else {
-						res.status(403).send("Origin Not Allowed");
-					}
+        return false;
+      }
 
-					return isAllowed;
-				}
+      if (Array.isArray(this.options.origin)) {
+        if (reqOrigin) {
+          const isAllowed = (this.options.origin as Array<string | RegExp>).some((item) => {
+            const isString = typeof item === "string" && item === reqOrigin;
+            const isRegex = item instanceof RegExp && item.test(reqOrigin);
 
-				return false;
-			}
+            return isString || isRegex;
+          });
 
-			if (typeof this.options.origin === "function") {
-				const func = this.options.origin as Function;
-				let resultAllowed = false;
+          if (isAllowed) {
+            res.headers.set("Access-Control-Allow-Origin", reqOrigin);
+          } else {
+            res.status(403).send("Origin Not Allowed");
+          }
 
-				func(reqOrigin, (err?: Error, resultOrigin?: string) => {
-					if (err) {
-						res.status(500).send(err.message);
-					}
+          return isAllowed;
+        }
 
-					if (resultOrigin) {
-						res.headers.set("Access-Control-Allow-Origin", resultOrigin);
-						resultAllowed = true;
-					} else {
-						res.status(403).send("Origin Not Allowed");
-					}
-				});
+        return false;
+      }
 
-				return resultAllowed;
-			}
-		}
+      if (typeof this.options.origin === "function") {
+        const func = this.options.origin as Function;
+        let resultAllowed = false;
 
-		return true;
-	}
+        func(reqOrigin, (err?: Error, resultOrigin?: string) => {
+          if (err) {
+            res.status(500).send(err.message);
+          }
 
-	private isMethodAllowed(methods: CorsOptions["methods"], reqMethod: string, res: Response): boolean {
-		if (methods && !this.handleMethods(reqMethod as MethodOptions, methods)) {
-			res.status(405).send("Method Not Allowed");
-			return false;
-		}
+          if (resultOrigin) {
+            res.headers.set("Access-Control-Allow-Origin", resultOrigin);
+            resultAllowed = true;
+          } else {
+            res.status(403).send("Origin Not Allowed");
+          }
+        });
 
-		return true;
-	}
+        return resultAllowed;
+      }
+    }
 
-	private handleMethods(method: MethodOptions, allowedMethods: CorsOptions["methods"]): boolean {
-		if (allowedMethods === "*") {
-			return true;
-		}
+    return true;
+  }
 
-		if (Array.isArray(allowedMethods) || typeof allowedMethods === "string") {
-			return allowedMethods.includes(method);
-		}
+  private isMethodAllowed(methods: CorsOptions["methods"], reqMethod: string, res: Response): boolean {
+    if (methods && !this.handleMethods(reqMethod as MethodOptions, methods)) {
+      res.status(405).send("Method Not Allowed");
+      return false;
+    }
 
-		return true;
-	}
+    return true;
+  }
 
-	private allowHeaders(allowedHeaders: CorsOptions["allowedHeaders"], res: Response): void {
-		if (allowedHeaders) {
-			const isArray = Array.isArray(allowedHeaders);
-			res.headers.set("Access-Control-Allow-Headers", isArray ? allowedHeaders.join(",") : allowedHeaders);
-		}
-	}
+  private handleMethods(method: MethodOptions, allowedMethods: CorsOptions["methods"]): boolean {
+    if (allowedMethods === "*") {
+      return true;
+    }
 
-	private exposeHeaders(exposedHeaders: CorsOptions["exposedHeaders"], res: Response): void {
-		if (exposedHeaders) {
-			const isArray = Array.isArray(exposedHeaders);
-			res.headers.set("Access-Control-Expose-Headers", isArray ? exposedHeaders.join(",") : exposedHeaders);
-		}
-	}
+    if (Array.isArray(allowedMethods) || typeof allowedMethods === "string") {
+      return allowedMethods.includes(method);
+    }
 
-	private addCredentials(credentials: CorsOptions["credentials"], res: Response): void {
-		if (credentials) {
-			res.headers.set("Access-Control-Allow-Credentials", String(credentials));
-		}
-	}
+    return true;
+  }
 
-	private addMaxAge(maxAge: CorsOptions["maxAge"], res: Response): void {
-		if (maxAge) {
-			res.headers.set("Access-Control-Max-Age", maxAge.toString());
-		}
-	}
+  private allowHeaders(allowedHeaders: CorsOptions["allowedHeaders"], res: Response): void {
+    if (allowedHeaders) {
+      const isArray = Array.isArray(allowedHeaders);
+      res.headers.set("Access-Control-Allow-Headers", isArray ? allowedHeaders.join(",") : allowedHeaders);
+    }
+  }
 
-	private handlePreflight(
-		preflightContinue: CorsOptions["preflightContinue"],
-		optionsSuccessStatus: CorsOptions["optionsSuccessStatus"],
-		res: Response,
-	): boolean {
-		if (!preflightContinue) {
-			res.status(optionsSuccessStatus || 204).send("");
-			return false;
-		}
+  private exposeHeaders(exposedHeaders: CorsOptions["exposedHeaders"], res: Response): void {
+    if (exposedHeaders) {
+      const isArray = Array.isArray(exposedHeaders);
+      res.headers.set("Access-Control-Expose-Headers", isArray ? exposedHeaders.join(",") : exposedHeaders);
+    }
+  }
 
-		return true;
-	}
+  private addCredentials(credentials: CorsOptions["credentials"], res: Response): void {
+    if (credentials) {
+      res.headers.set("Access-Control-Allow-Credentials", String(credentials));
+    }
+  }
+
+  private addMaxAge(maxAge: CorsOptions["maxAge"], res: Response): void {
+    if (maxAge) {
+      res.headers.set("Access-Control-Max-Age", maxAge.toString());
+    }
+  }
+
+  private handlePreflight(
+    preflightContinue: CorsOptions["preflightContinue"],
+    optionsSuccessStatus: CorsOptions["optionsSuccessStatus"],
+    res: Response,
+  ): boolean {
+    if (!preflightContinue) {
+      res.status(optionsSuccessStatus || 204).send("");
+      return false;
+    }
+
+    return true;
+  }
 }

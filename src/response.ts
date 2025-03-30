@@ -100,8 +100,8 @@ class ResponseWrapper {
 
   private setCookie(name: string, value: string, options?: CookiesOptions): this {
     const cookie = this.cookiesInstance.set(name, value, options);
-
     this.headersInstance.append("Set-Cookie", cookie);
+
     return this;
   }
 
@@ -109,7 +109,11 @@ class ResponseWrapper {
     const allCookies = this.cookiesInstance.getAll();
 
     for (const [name, value] of Object.entries(allCookies)) {
-      this.headersInstance.append("Set-Cookie", this.cookiesInstance.set(name, value));
+      const cookie = this.cookiesInstance.set(name, value);
+
+      if (!this.headersInstance.get("Set-Cookie")?.includes(cookie)) {
+        this.headersInstance.append("Set-Cookie", cookie);
+      }
     }
   }
 }

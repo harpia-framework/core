@@ -9,7 +9,9 @@ export class RequestMonitor {
   private store: Store;
   private ignoredPaths: string[];
 
-  constructor({ store, ignore }: Options) {
+  constructor(options?: Options) {
+    const { store, ignore } = options || {};
+
     this.store = store || new MemoryStore();
     this.ignoredPaths = ignore || [];
   }
@@ -59,7 +61,7 @@ export class RequestMonitor {
     return obj;
   }
 
-  private async saveMetrics(monitor: MonitorInterface): Promise<void> {
+  public async saveMetrics(monitor: MonitorInterface): Promise<void> {
     const metrics = {
       access: {
         visitorsByDate: this.mapToObject(monitor.access.visitorsByDate),
@@ -74,7 +76,8 @@ export class RequestMonitor {
   }
 
   public async getMetrics(): Promise<any> {
-    return await this.store.get("metrics");
+    const metrics = await this.store.get("metrics");
+    return metrics || { access: { visitorsByDate: {}, totalRequests: 0 }, behavior: { pageViews: {} } };
   }
 
   private convertStoredMetrics(metricsObj: any): MonitorInterface {
@@ -107,7 +110,13 @@ export class RequestMonitor {
       throw new Error("Monitor has not been initialized with request data");
     }
 
+    const clientIp = this.getClientIp();
+
     try {
+      if (clientIp === "unknown") {
+        throw new Error("Invalid client IP");
+      }
+
       const url = new URL(this.request.url);
       const path = url.pathname;
 
@@ -118,7 +127,6 @@ export class RequestMonitor {
       }
 
       const startTime = Date.now();
-      const clientIp = this.getClientIp();
       const timestamp = new Date().toISOString();
       const dateKey = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
 
@@ -171,10 +179,9 @@ export class RequestMonitor {
       // Save updated metrics to the store
       await this.saveMetrics(monitor);
     } catch (error) {
-      const clientIp = this.getClientIp();
       const dateKey = new Date().toISOString().split("T")[0];
 
-      // Try to retrieve metrics to update the error count
+      // Tenta recuperar métricas para atualizar o contador de erros
       const storedMetrics = await this.getMetrics();
       let monitor: MonitorInterface;
       if (storedMetrics) {
@@ -186,12 +193,22 @@ export class RequestMonitor {
         };
       }
 
-      if (monitor.access.visitorsByDate.has(dateKey)) {
-        const dailyVisitors = monitor.access.visitorsByDate.get(dateKey)!;
-        if (dailyVisitors.has(clientIp)) {
-          dailyVisitors.get(clientIp)!.errors++;
-        }
+      if (!monitor.access.visitorsByDate.has(dateKey)) {
+        monitor.access.visitorsByDate.set(dateKey, new Map<string, VisitorData>());
       }
+
+      const dailyVisitors = monitor.access.visitorsByDate.get(dateKey)!;
+
+      if (!dailyVisitors.has(clientIp)) {
+        dailyVisitors.set(clientIp, {
+          totalRequests: 0,
+          pagesVisited: [],
+          responseTimes: [],
+          errors: 0,
+        });
+      }
+
+      dailyVisitors.get(clientIp)!.errors++;
 
       await this.saveMetrics(monitor);
 
