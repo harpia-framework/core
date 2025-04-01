@@ -222,10 +222,10 @@ export class Application {
     return false;
   }
 
-  private async methodOverride(req: FetchRequest, res: Response, urlPath: string): Promise<Request> {
-    const request = new Request(req, {}, req.url, urlPath, req.method);
+  private async methodOverride(req: FetchRequest): Promise<string> {
     const isPost = req.method === "POST";
     const contentType = req.headers.get("content-type")?.includes("application/x-www-form-urlencoded");
+    let method: string = req.method;
 
     if (isPost && contentType) {
       const formData = new URLSearchParams(await req.text());
@@ -233,11 +233,11 @@ export class Application {
       const validMethods = ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"];
 
       if (overrideMethod && validMethods.includes(overrideMethod)) {
-        request.method = overrideMethod;
+        method = overrideMethod;
       }
     }
 
-    return request;
+    return method;
   }
 
   private async handleRequest(req: FetchRequest, server?: Server): Promise<FetchResponse> {
@@ -261,8 +261,8 @@ export class Application {
     }
 
     const urlPath = new URL(req.url).pathname;
-    const request = await this.methodOverride(req, response, urlPath);
-    const route = this.router.isRouteMatching(urlPath, request.method);
+    const methodOverride = await this.methodOverride(req);
+    const route = this.router.isRouteMatching(urlPath, methodOverride);
     const staticFileExists = await this.resolveStaticFiles(urlPath, response);
 
     if (!route) {
@@ -278,6 +278,8 @@ export class Application {
     if (!route.controller) {
       throw new Error("Controller handler is missing.");
     }
+
+    const request = new Request(req, {}, req.url, route.path, methodOverride);
 
     // Execute global middlewares
     const middlewareList = this.middlewares.isMiddlewareMatching(urlPath);
