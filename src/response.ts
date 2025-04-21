@@ -12,6 +12,7 @@ class ResponseWrapper {
   public headers: Headers;
   public cookies = {
     set: this.setCookie.bind(this),
+    delete: this.deleteCookie.bind(this),
   };
 
   constructor() {
@@ -101,6 +102,12 @@ class ResponseWrapper {
   private setCookie(name: string, value: string, options?: CookiesOptions): this {
     const cookie = this.cookiesInstance.set(name, value, options);
     this.headersInstance.append("Set-Cookie", cookie);
+
+    return this;
+  }
+
+  private deleteCookie(name: string, options?: CookiesOptions): this {
+    this.cookiesInstance.delete(name, options);
 
     return this;
   }
