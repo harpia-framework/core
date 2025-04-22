@@ -7,7 +7,7 @@ Harpia Core is the foundational module of the Harpia Framework, designed exclusi
 
 [![Bun](https://img.shields.io/badge/Bun-%3E%3D%201.x-blue.svg)](https://bun.sh/)
 
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpia-framework/core/blob/main/LICENSE)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://github.com/harpiats/core/blob/main/LICENSE)
 
 
 Table of Contents

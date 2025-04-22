@@ -4,7 +4,7 @@
   "type": "module",
   "bin": "./index.ts",
   "license": "MIT",
-  "version": "1.0.0-beta.4",
+  "version": "1.0.0-beta.5",
   "scripts": {
     "commit": "cz"
   },
@@ -14,9 +14,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/harpia-framework/core"
+    "url": "https://github.com/harpiats/core"
   },
-  "homepage": "https://github.com/harpia-framework/core",
+  "homepage": "https://github.com/harpiats/core",
   "description": "Harpia Framework is designed exclusively for the Bun runtime. Like Express, Fastify, or Hono, it can be used independently, offering a lightweight yet powerful foundation for building modern web applications optimized for Bun.",
   "keywords": ["harpia", "bun", "framework", "web", "api"],
   "devDependencies": {
