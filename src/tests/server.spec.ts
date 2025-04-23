@@ -457,31 +457,31 @@ describe("Server", () => {
   describe("methodOverride", () => {
     it("should not override method if not a POST request", async () => {
       mockRequest.method = "GET";
-      const request = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
-      expect(request.method).toBe("GET");
+      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      expect(method).toBe("GET");
     });
 
     it("should not override method if content-type is not application/x-www-form-urlencoded", async () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/json");
-      const request = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
-      expect(request.method).toBe("POST");
+      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      expect(method).toBe("POST");
     });
 
     it("should override method if POST request with application/x-www-form-urlencoded", async () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/x-www-form-urlencoded");
       mockRequest.text = mock(() => Promise.resolve("_method=PUT"));
-      const request = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
-      expect(request.method).toBe("PUT");
+      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      expect(method).toBe("PUT");
     });
 
     it("should not override method if _method is invalid", async () => {
       mockRequest.method = "POST";
       mockRequest.headers.set("content-type", "application/x-www-form-urlencoded");
       mockRequest.text = mock(() => Promise.resolve("_method=INVALID"));
-      const request = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
-      expect(request.method).toBe("POST");
+      const method = await (app as any).methodOverride(mockRequest, mockResponse, "/test");
+      expect(method).toBe("POST");
     });
   });
 
