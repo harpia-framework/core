@@ -94,7 +94,7 @@ export class TestClient {
 
     this.bodyType = "json";
     this.headersInstance.set("Content-Type", "application/json");
-    this.body = JSON.stringify(data);
+    this.body = JSON.parse(data);
     return this;
   }
 
