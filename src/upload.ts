@@ -23,6 +23,10 @@ export class Upload {
     };
   }
 
+  private async saveFile(filePath: string, file: File) {
+    await Bun.write(filePath, file);
+  }
+
   public single = async (req: Request, res: Response, next: NextFunction) => {
     const formData = await req.formData();
 
@@ -36,7 +40,11 @@ export class Upload {
       return res.status(validationResult.status).json({ message: validationResult.message });
     }
 
-    await Bun.write(path.join(process.cwd(), this.path, fileName), file);
+    try {
+      await this.saveFile(path.join(process.cwd(), this.path, fileName), file);
+    } catch (error) {
+      return res.status(500).json({ message: "Internal server error" });
+    }
 
     req.formData = () => Promise.resolve(formData);
     next();
@@ -63,7 +71,13 @@ export class Upload {
 
       try {
         const filePath = path.join(process.cwd(), this.path, fileName);
-        await Bun.write(filePath, file);
+
+        try {
+          await this.saveFile(filePath, file);
+        } catch (error) {
+          return res.status(500).json({ message: "Internal server error" });
+        }
+
         successfullyWrittenFiles.push(filePath);
       } catch (error: any) {
         errors.push({
