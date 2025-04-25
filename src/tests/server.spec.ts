@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test";
-import type { MethodOptions } from "src/types/router";
 import { Cors } from "../cors";
 import { Middleware } from "../middlewares";
 import { Request } from "../request";
@@ -7,6 +6,8 @@ import { Response } from "../response";
 import { Router } from "../router";
 import { Application } from "../server";
 import { WebSocket } from "../websocket";
+
+import type { MethodOptions } from "src/types/router";
 
 describe("Server", () => {
   let app: Application;
@@ -46,6 +47,7 @@ describe("Server", () => {
     (app as any).websocket = new WebSocket();
     (app as any).serverInstance = null;
     (app as any).ipAdress = null;
+    (app as any).setTemplateEngine(null);
   });
 
   afterEach(() => {
