@@ -1,0 +1,27 @@
+name: Code Review
+
+on:
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  test:
+    name: Run Isolated Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Make test script executable
+        run: chmod +x ./run-isolated-tests.sh
+
+      - name: Run isolated tests
+        run: ./run-isolated-tests.sh
