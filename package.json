@@ -4,7 +4,7 @@
   "type": "module",
   "bin": "./index.ts",
   "license": "MIT",
-  "version": "1.0.0-beta.8",
+  "version": "1.0.0-beta.9",
   "scripts": {
     "commit": "cz"
   },
@@ -21,14 +21,14 @@
   "keywords": ["harpia", "bun", "framework", "web", "api"],
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
-    "@commitlint/cli": "^19.6.1",
-    "@commitlint/config-conventional": "^19.6.0",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
     "@types/bun": "latest",
     "commitizen": "^4.3.1",
     "cz-conventional-changelog": "^3.3.0"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.7.2"
   },
   "exports": {
     ".": "./index.ts",
