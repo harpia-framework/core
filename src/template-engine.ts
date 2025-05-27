@@ -122,7 +122,7 @@ export class TemplateEngine implements Engine {
     let moduleOverride: string | null = null;
     let viewName = templateName;
 
-    const moduleRegex = /^\*(\w+)\*\/(.*)$/;
+    const moduleRegex = /^\*([^*]+)\*\/(.*)$/;
     const match = templateName.match(moduleRegex);
 
     if (match) {
